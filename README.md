@@ -37,9 +37,9 @@ Clone Hero. Also just difficult to read from, may revisit.
 
 ## Acknowledgements
 
-- **[YellowDogMan](https://github.com/YellowDogMan)** — [RRNoise.NET](https://www.nuget.org/packages/YellowDogMan.RRNoise.NET), which powers the voice detection
+- **[Yellow-Dog-Man](https://github.com/Yellow-Dog-Man)** — [RRNoise.NET](https://www.nuget.org/packages/YellowDogMan.RRNoise.NET), which powers the voice detection
 - **[Sanjay900](https://github.com/Sanjay900)** — cool guy, go check out [Santroller](https://github.com/Sanjay900/Santroller)
-- **[Nathannator](https://github.com/TheNathannator)** — [plastic-band](https://github.com/TheNathannator/plastic-band), an incredibly useful reference for instrument input data
+- **[TheNathannator](https://github.com/TheNathannator)** — [plastic-band](https://github.com/TheNathannator/plastic-band), an incredibly useful reference for instrument input data
 
 ## License
 
