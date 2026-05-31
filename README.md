@@ -1,4 +1,4 @@
-# CHEAPOverlay
+# Cassi's Hyperspecific Extremely Arbitrary Portable Overlay (CHEAPOverlay)
 A Sprite Based Input Overlay for Guitar Hero and Rock Band adjacent rhythm games.
 Originally set out to build a sprite based input overlay for personal projects and fell into scope creep and eventually now we're here.
 
