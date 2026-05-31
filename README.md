@@ -25,7 +25,7 @@ this program does support multiple instruments. in your obs display follow the h
 
 ## Sprites
 
-the big focal point of this program is the sprites. you can set your own sprites. if you don't have the service running, you can use the html as a browser file and enter artist mode, this allows you to display all the sprites in the program.
+the big focal point of this program is the sprites. you can set your own sprites. if you don't have the service running, you can use the html as a browser file and enter artist mode, this allows you to display all the sprites in the program. This program has over 200 sprites for every combination of frets, keys, and drum combinations you could have. 
 
 ## Supported inputs
 
