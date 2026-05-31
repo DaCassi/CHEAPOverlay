@@ -1,0 +1,1092 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>CHEAPOverlay</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: transparent; overflow: hidden; font-family: monospace; }
+
+  #overlay-root { position: relative; display: none; }
+
+  .layer {
+    position: absolute; top: 0; left: 0;
+    width: 100%; height: 100%; object-fit: contain;
+  }
+  #layer-strum { display: block; }
+
+  #debug {
+    position: absolute; bottom: 4px; left: 4px;
+    background: rgba(0,0,0,0.7); color: #0f0;
+    font-size: 10px; padding: 4px 8px; border-radius: 3px;
+    line-height: 1.6; pointer-events: none;
+    display: none;
+  }
+
+  /* ── PS2 calibration overlay (UNTESTED) ── */
+  #calibrate-overlay {
+    display: none;
+    position: fixed; top: 0; left: 0; z-index: 9999;
+    width: 100vw; height: 100vh;
+    background: rgba(0,0,0,0.95);
+    color: #fff; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 18px; font-family: monospace; text-align: center; padding: 24px;
+  }
+  #calibrate-overlay h2 { font-size: 20px; letter-spacing: 2px; color: #ff0; }
+  #calibrate-device    { font-size: 11px; color: #555; }
+  #calibrate-label     { font-size: 26px; font-weight: bold; color: #fff; }
+  #calibrate-hint      { font-size: 12px; color: #888; }
+  #calibrate-frets {
+    display: flex; gap: 10px; align-items: center; margin: 4px 0;
+  }
+  .cal-fret {
+    width: 36px; height: 36px; border-radius: 50%;
+    border: 2px solid #444; background: #111;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; color: #555; font-weight: bold;
+    transition: all 0.15s;
+  }
+  .cal-fret.done { border-color: #0f0; color: #0f0; }
+  .cal-fret.active { border-color: #fff; color: #fff; background: #222; transform: scale(1.2); }
+  .cal-fret.g { border-color: #3a3; } .cal-fret.g.active { background: #1a4a1a; border-color: #0f0; }
+  .cal-fret.r { border-color: #a33; } .cal-fret.r.active { background: #4a1a1a; border-color: #f44; }
+  .cal-fret.y { border-color: #aa3; } .cal-fret.y.active { background: #4a4a1a; border-color: #ff0; }
+  .cal-fret.b { border-color: #33a; } .cal-fret.b.active { background: #1a1a4a; border-color: #44f; }
+  .cal-fret.o { border-color: #a63; } .cal-fret.o.active { background: #4a2a1a; border-color: #fa0; }
+
+  #status {
+    position: fixed; top: 0; left: 0;
+    width: 100vw; height: 100vh;
+    background: rgba(0,0,0,0.88);
+    color: #fff; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 12px; font-size: 14px; text-align: center; padding: 20px;
+  }
+  #status h2 { font-size: 18px; letter-spacing: 1px; }
+  #status-msg { font-size: 14px; color: #aaa; }
+  #status-detail { font-size: 11px; color: #555; }
+  #artist-mode-btn {
+    margin-top: 16px;
+    padding: 8px 24px; border-radius: 6px;
+    border: 2px solid #ff0; background: rgba(255,255,0,0.08);
+    color: #ff0; font-family: monospace; font-size: 13px;
+    cursor: pointer; transition: all 0.15s;
+  }
+  #artist-mode-btn:hover { background: rgba(255,255,0,0.18); }
+
+  #artist {
+    position: fixed; top: 0; left: 0;
+    width: 100vw; height: 100vh;
+    background: #111;
+    color: #fff; display: none; flex-direction: row;
+    font-size: 13px;
+  }
+
+  #artist-preview-panel {
+    flex: 0 0 auto;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 24px; gap: 12px;
+    border-right: 1px solid #333;
+    min-width: 240px;
+  }
+  #artist-preview {
+    position: relative;
+    background: repeating-conic-gradient(#222 0% 25%, #1a1a1a 0% 50%) 0 0 / 16px 16px;
+    border: 1px solid #444; border-radius: 4px;
+    overflow: hidden;
+  }
+  #artist-preview img {
+    position: absolute; top: 0; left: 0;
+    width: 100%; height: 100%; object-fit: contain;
+  }
+  #artist-size { font-size: 11px; color: #555; }
+  #artist-sprite-name { font-size: 14px; font-weight: bold; color: #0f0; text-align: center; }
+
+  #artist-controls {
+    flex: 1; overflow-y: auto;
+    padding: 20px; display: flex; flex-direction: column; gap: 16px;
+  }
+  #artist-controls h3 { font-size: 13px; color: #888; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+
+  .layer-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 10px; border-radius: 4px;
+    background: rgba(255,255,255,0.04); border: 1px solid #333;
+  }
+  .layer-label { width: 80px; font-size: 12px; color: #aaa; flex-shrink: 0; }
+  .layer-select {
+    flex: 1; background: #1a1a1a; color: #fff;
+    border: 1px solid #444; border-radius: 3px;
+    padding: 4px 6px; font-family: monospace; font-size: 12px;
+  }
+  .layer-toggle {
+    width: 28px; height: 28px; border-radius: 3px;
+    border: 1px solid #555; background: rgba(255,255,255,0.05);
+    color: #fff; font-size: 14px; cursor: pointer; flex-shrink: 0;
+  }
+  .layer-toggle.on  { border-color: #0f0; color: #0f0; }
+  .layer-toggle.off { border-color: #555; color: #555; }
+
+  .nav-btns { display: flex; gap: 8px; }
+  .nav-btn {
+    padding: 6px 16px; border-radius: 4px;
+    border: 1px solid #555; background: rgba(255,255,255,0.05);
+    color: #fff; font-family: monospace; font-size: 12px; cursor: pointer;
+  }
+  .nav-btn:hover { border-color: #fff; }
+
+  #artist-counter { font-size: 11px; color: #555; }
+
+  .sprite-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+    gap: 6px; max-height: 300px; overflow-y: auto;
+  }
+  .sprite-thumb {
+    padding: 4px 6px; border-radius: 3px;
+    border: 1px solid #333; background: rgba(255,255,255,0.03);
+    font-size: 10px; color: #888; cursor: pointer; text-align: center;
+    transition: all 0.1s;
+  }
+  .sprite-thumb:hover { border-color: #888; color: #fff; }
+  .sprite-thumb.active { border-color: #0f0; color: #0f0; background: rgba(0,255,0,0.06); }
+
+  #artist-close {
+    font-size: 11px; color: #555; cursor: pointer;
+    text-decoration: underline; align-self: flex-start;
+  }
+  #artist-close:hover { color: #aaa; }
+</style>
+</head>
+<body>
+
+<!-- PS2 calibration overlay — shown by handleCalibration(); hidden normally (UNTESTED) -->
+<div id="calibrate-overlay">
+  <h2>PS2 CONTROLLER CALIBRATION</h2>
+  <div id="calibrate-device"></div>
+  <div id="calibrate-frets">
+    <div class="cal-fret g" data-step="green">G</div>
+    <div class="cal-fret r" data-step="red">R</div>
+    <div class="cal-fret y" data-step="yellow">Y</div>
+    <div class="cal-fret b" data-step="blue">B</div>
+    <div class="cal-fret o" data-step="orange">O</div>
+    <div class="cal-fret" data-step="strumUp" style="border-radius:4px;width:44px">SU</div>
+    <div class="cal-fret" data-step="strumDown" style="border-radius:4px;width:44px">SD</div>
+    <div class="cal-fret" data-step="starPower" style="border-radius:4px;width:44px">SP</div>
+  </div>
+  <div id="calibrate-label">Hold still...</div>
+  <div id="calibrate-hint">Press and release each input when prompted.<br>30 seconds per step before calibration aborts.</div>
+</div>
+
+<div id="status">
+  <h2>Cassi's Hyperspecific Extremely Arbitrary Portable Overlay</h2>
+  <div id="status-msg">Looking for guitar...</div>
+  <div id="status-detail">Searching XInput and HID service</div>
+  <button id="artist-mode-btn" onclick="openArtistMode()">🎨 Artist Mode</button>
+</div>
+
+<div id="artist">
+  <div id="artist-preview-panel">
+    <div id="artist-preview" style="width:200px;height:200px;">
+      <img id="ap-body"  src="sprites/Guitar_base.png" alt="">
+      <img id="ap-hand"  src="sprites/fret_open.png" alt="">
+      <img id="ap-strum" src="" alt="" style="display:none;">
+      <img id="ap-drum-kick" src="" alt="" style="display:none;">
+      <img id="ap-drum"      src="" alt="" style="display:none;">
+      <img id="ap-mouth"     src="sprites/mouth_closed.png" alt="">
+    </div>
+    <div id="artist-size">200 × 200</div>
+    <div id="artist-sprite-name">fret_open</div>
+    <div class="nav-btns">
+      <button class="nav-btn" onclick="artistPrev()">← Prev</button>
+      <button class="nav-btn" onclick="artistNext()">Next →</button>
+    </div>
+    <div id="artist-counter">1 / 33</div>
+    <div id="artist-close" onclick="closeArtistMode()">← Back</div>
+  </div>
+
+  <div id="artist-controls">
+    <div>
+      <h3>Layer Visibility</h3>
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        <div class="layer-row">
+          <span class="layer-label">Body Base</span>
+          <select class="layer-select" id="sel-body" onchange="artistBodyChanged()">
+            <option value="sprites/Guitar_base.png">Guitar_base.png</option>
+            <option value="sprites/Drums_Base.png">Drums_Base.png</option>
+            <option value="sprites/Keys_Base.png">Keys_Base.png</option>
+          </select>
+          <button class="layer-toggle on" id="tog-body" onclick="toggleLayer('body')">👁</button>
+        </div>
+        <div class="layer-row" id="row-hand">
+          <span class="layer-label" id="label-hand">Fret</span>
+          <select class="layer-select" id="sel-hand" onchange="artistUpdatePreview()"></select>
+          <button class="layer-toggle on" id="tog-hand" onclick="toggleLayer('hand')">👁</button>
+        </div>
+        <div class="layer-row" id="row-strum">
+          <span class="layer-label">Strum</span>
+          <select class="layer-select" id="sel-strum" onchange="artistRender()">
+            <option value="sprites/strum_neutral.png">strum_neutral.png</option>
+            <option value="sprites/strum_up.png">strum_up.png</option>
+            <option value="sprites/strum_down.png">strum_down.png</option>
+          </select>
+          <button class="layer-toggle on" id="tog-strum" onclick="toggleLayer('strum')">👁</button>
+        </div>
+        <div class="layer-row" id="row-drumKick">
+          <span class="layer-label">Kick</span>
+          <span style="flex:1;font-size:11px;color:#555;">auto (GH/RB Kick)</span>
+          <button class="layer-toggle on" id="tog-drumKick" onclick="toggleLayer('drumKick')">👁</button>
+        </div>
+        <div class="layer-row" id="row-drum">
+          <span class="layer-label">Hits</span>
+          <select class="layer-select" id="sel-drum" onchange="artistUpdateDrum()"></select>
+          <button class="layer-toggle on" id="tog-drum" onclick="toggleLayer('drum')">👁</button>
+        </div>
+        <div class="layer-row">
+          <span class="layer-label">Mouth</span>
+          <select class="layer-select" id="sel-mouth" onchange="artistRender()">
+            <option value="sprites/mouth_closed.png">mouth_closed.png</option>
+            <option value="sprites/mouth_open.png">mouth_open.png</option>
+          </select>
+          <button class="layer-toggle on" id="tog-mouth" onclick="toggleLayer('mouth')">👁</button>
+        </div>
+      </div>
+    </div>
+    <div>
+      <h3 id="sprite-grid-heading">Sprites</h3>
+      <div class="sprite-grid" id="sprite-grid"></div>
+    </div>
+  </div>
+</div>
+
+<div id="overlay-root">
+  <img id="layer-body"  class="layer" src="sprites/Guitar_base.png" alt="">
+  <img id="layer-hand"  class="layer" src="sprites/fret_open.png" alt="">
+  <img id="layer-strum" class="layer" src="sprites/strum_neutral.png" alt="">
+  <img id="layer-drum-kick" class="layer" style="display:none" src="" alt="">
+  <img id="layer-drum"      class="layer" style="display:none" src="" alt="">
+  <img id="layer-mouth"     class="layer" src="sprites/mouth_closed.png" alt="">
+  <div id="debug">
+    <div>Source: <span id="dbg-source">-</span></div>
+    <div>Guitar: <span id="dbg-guitar">-</span></div>
+    <div>Frets:  <span id="dbg-frets">-----</span></div>
+    <div>Strum:  <span id="dbg-strum">neutral</span></div>
+    <div>SP:     <span id="dbg-sp">off</span></div>
+    <div>Axis:   <span id="dbg-axis">-</span></div>
+    <div style="margin-top:4px;">
+      <span onclick="openArtistMode()" style="cursor:pointer;text-decoration:underline;color:#ff0;">
+        Artist Mode
+      </span>
+    </div>
+  </div>
+</div>
+
+<script>
+const WS_URL       = 'ws://localhost:2828';
+const RECONNECT_MS = 2000;
+
+// Multiplayer: ?player=0 uses sprites/player1/, ?player=1 uses sprites/player2/, etc.
+// No ?player= param = single-player compat mode (uses sprites/ directly, listens to player 0).
+const _playerParam  = new URLSearchParams(window.location.search).get('player');
+const PLAYER_INDEX  = _playerParam !== null ? parseInt(_playerParam, 10) : 0;
+const SPRITE_PATH   = _playerParam !== null ? `sprites/player${PLAYER_INDEX + 1}/` : 'sprites/';
+// SP sprites only exist in the root sprites/ folder (no per-player variants yet).
+const SP_PATH       = 'sprites/';
+
+// =============================================================================
+// XINPUT GUITAR BUTTON MAPPING
+// Standard Xbox 360 guitar via Gamepad API
+// These are defaults — calibration can override
+// =============================================================================
+const XINPUT_MAP = {
+  green:  0,
+  red:    1,
+  yellow: 4,
+  blue:   3,
+  orange: 6,
+  strumAxis:       9,
+  strumUpValue:   -1.0,
+  strumDownValue:  0.14286,
+  strumOpenDeadzone: 1.0,
+  strumTolerance:  0.05,
+};
+
+// =============================================================================
+// INPUT SOURCE MANAGER
+// Tracks whether we're using WS (HID) or Gamepad API (XInput)
+// WS takes priority if connected; Gamepad API is fallback
+// =============================================================================
+const INPUT = {
+  wsConnected:      false,
+  gamepadIndex:     null,
+  activeSource:     null, // 'ws' | 'gamepad' | null
+};
+
+let prevAxisStrum = 'open';
+
+// =============================================================================
+// SPRITE LIST
+// =============================================================================
+const HAND_SPRITES = [
+  'fret_open',
+  ...['G','R','Y','B','O'].map(a => `fret_${a}`),
+  ...['GR','GY','GB','GO','RY','RB','RO','YB','YO','BO'].map(a => `fret_${a}`),
+  ...['GRY','GRB','GRO','GYB','GYO','GBO','RYB','RYO','RBO','YBO'].map(a => `fret_${a}`),
+  ...['GRYB','GRYO','GRBO','GYBO','RYBO'].map(a => `fret_${a}`),
+  'fret_GRYBO',
+];
+
+// =============================================================================
+// OVERLAY STATE
+// =============================================================================
+const SOLO_SPRITES = [
+  ...['G','R','Y','B','O'].map(a => `solo_fret_${a}`),
+  ...['GR','GY','GB','GO','RY','RB','RO','YB','YO','BO'].map(a => `solo_fret_${a}`),
+  ...['GRY','GRB','GRO','GYB','GYO','GBO','RYB','RYO','RBO','YBO'].map(a => `solo_fret_${a}`),
+  ...['GRYB','GRYO','GRBO','GYBO','RYBO'].map(a => `solo_fret_${a}`),
+  'solo_fret_GRYBO',
+];
+const GH_DRUM_SPRITES = [
+  'GH_Drums_Rest', 'GH_Drums_Kick',
+  'GH_Drums_G', 'GH_Drums_R', 'GH_Drums_Y', 'GH_Drums_B', 'GH_Drums_O',
+  'GH_Drums_GR', 'GH_Drums_GY', 'GH_Drums_GB', 'GH_Drums_GO',
+  'GH_Drums_RY', 'GH_Drums_RB', 'GH_Drums_RO',
+  'GH_Drums_YB', 'GH_Drums_YO', 'GH_Drums_BO',
+];
+
+const RB_DRUM_SPRITES = [
+  'RB_Drums_Rest', 'RB_Drums_Kick',
+  'RB_Drums_Drums_R', 'RB_Drums_Drums_Y', 'RB_Drums_Drums_B', 'RB_Drums_Drums_G',
+  'RB_Drums_Drums_RY', 'RB_Drums_Drums_RB', 'RB_Drums_Drums_RG',
+  'RB_Drums_Drums_YB', 'RB_Drums_Drums_YG', 'RB_Drums_Drums_BG',
+  'RB_Drums_Cymbal_Y', 'RB_Drums_Cymbal_B', 'RB_Drums_Cymbal_G',
+  'RB_Drums_Cymbal2_YB', 'RB_Drums_Cymbal2_YG', 'RB_Drums_Cymbal2_BG',
+  'RB_Drums_DrumsCymbals_YCymRTom', 'RB_Drums_DrumsCymbals_YCymBTom', 'RB_Drums_DrumsCymbals_YCymGTom',
+  'RB_Drums_DrumsCymbals_BCymRTom', 'RB_Drums_DrumsCymbals_BCymYTom', 'RB_Drums_DrumsCymbals_BCymGTom',
+  'RB_Drums_DrumsCymbals_GCymRTom', 'RB_Drums_DrumsCymbals_GCymYTom', 'RB_Drums_DrumsCymbals_GCymBTom',
+];
+
+const KEYS_SPRITES = [
+  'Keys_Open',
+  ...['G','R','Y','B','O'].map(a => `Keys_${a}`),
+  ...['GR','GY','GB','GO','RY','RB','RO','YB','YO','BO'].map(a => `Keys_${a}`),
+  ...['GRY','GRB','GRO','GYB','GYO','GBO','RYB','RYO','RBO','YBO'].map(a => `Keys_${a}`),
+  ...['GRYB','GRYO','GRBO','GYBO','RYBO'].map(a => `Keys_${a}`),
+  'Keys_GRYBO',
+];
+
+const DRUM_SPRITES = [...GH_DRUM_SPRITES, ...RB_DRUM_SPRITES];
+const ALL_SPRITES  = [...HAND_SPRITES, ...SOLO_SPRITES, ...KEYS_SPRITES, ...DRUM_SPRITES];
+
+const state = {
+  frets:     { g: false, r: false, y: false, b: false, o: false },
+  soloFrets: { g: false, r: false, y: false, b: false, o: false },
+  strum: 'neutral',
+  currentHandSprite: 'fret_open',
+  currentStrum: 'neutral',
+  drumMode: '',              // 'gh' | 'rb' | '' (empty = guitar/keys mode)
+  instrumentType: 'guitar',  // 'guitar' | 'drums' | 'keys'
+  drums: { kick: false, r: false, y: false, b: false, g: false, o: false, yCym: false, bCym: false, gCym: false },
+  currentDrumSprite: '',
+  currentKickSprite: '',
+  currentBaseName: '',
+  starPower: false,          // true while GHWTDE star power is active
+};
+
+// =============================================================================
+// DOM REFS
+// =============================================================================
+const statusEl     = document.getElementById('status');
+const statusMsg    = document.getElementById('status-msg');
+const statusDetail = document.getElementById('status-detail');
+const overlayRoot  = document.getElementById('overlay-root');
+const layerBody     = document.getElementById('layer-body');
+const layerHand     = document.getElementById('layer-hand');
+const layerStrum    = document.getElementById('layer-strum');
+const layerDrumKick = document.getElementById('layer-drum-kick');
+const layerDrum     = document.getElementById('layer-drum');
+const layerMouth    = document.getElementById('layer-mouth');
+const dbgSource    = document.getElementById('dbg-source');
+const dbgGuitar    = document.getElementById('dbg-guitar');
+const dbgFrets     = document.getElementById('dbg-frets');
+const dbgStrum     = document.getElementById('dbg-strum');
+const dbgAxis      = document.getElementById('dbg-axis');
+const dbgSP        = document.getElementById('dbg-sp');
+
+layerBody.addEventListener('load', () => {
+  const w = layerBody.naturalWidth;
+  const h = layerBody.naturalHeight;
+  if (w && h) {
+    overlayRoot.style.width  = w + 'px';
+    overlayRoot.style.height = h + 'px';
+    document.body.style.width  = w + 'px';
+    document.body.style.height = h + 'px';
+  }
+});
+
+// =============================================================================
+// SPRITE NAME
+// =============================================================================
+function getFretSpriteName(f, sp) {
+  if (!f.g && !f.r && !f.y && !f.b && !f.o) return sp ? 'fret_open_sp' : 'fret_open';
+  let name = 'fret_';
+  if (f.g) name += 'G';
+  if (f.r) name += 'R';
+  if (f.y) name += 'Y';
+  if (f.b) name += 'B';
+  if (f.o) name += 'O';
+  if (sp) name += '_sp';
+  return name;
+}
+
+function getKeySpriteName(f) {
+  if (!f.g && !f.r && !f.y && !f.b && !f.o) return 'Keys_Open';
+  let name = 'Keys_';
+  if (f.g) name += 'G';
+  if (f.r) name += 'R';
+  if (f.y) name += 'Y';
+  if (f.b) name += 'B';
+  if (f.o) name += 'O';
+  return name;
+}
+
+function getSoloFretSpriteName(f, sp) {
+  if (!f.g && !f.r && !f.y && !f.b && !f.o) return null;
+  let combo = '';
+  if (f.g) combo += 'G';
+  if (f.r) combo += 'R';
+  if (f.y) combo += 'Y';
+  if (f.b) combo += 'B';
+  if (f.o) combo += 'O';
+  // SP solo sprites use fret_{combo}_sp_solo naming (different from solo_fret_{combo})
+  if (sp) return 'fret_' + combo + '_sp_solo';
+  return 'solo_fret_' + combo;
+}
+
+// =============================================================================
+// DRUM SPRITE NAME BUILDERS
+// =============================================================================
+// GH: 5 pads (G,R,Y,B,O) + kick — no cymbal/tom split
+// Available combos: all 5 singles + all 10 doubles; no triples
+const GH_DRUM_VALID = new Set([
+  'G','R','Y','B','O',
+  'GB','GO','GR','GY','RB','RO','RY','YB','YO','BO',
+]);
+
+function getGHDrumSpriteName(d) {
+  const pads = (d.g?'G':'') + (d.r?'R':'') + (d.y?'Y':'') + (d.b?'B':'') + (d.o?'O':'');
+  if (pads.length === 0) return 'GH_Drums_Rest'; // kick handled by its own layer
+  if (GH_DRUM_VALID.has(pads)) return 'GH_Drums_' + pads;
+  // 3+ pads — take first valid pair or first single
+  if (pads.length >= 2 && GH_DRUM_VALID.has(pads.slice(0, 2))) return 'GH_Drums_' + pads.slice(0, 2);
+  return 'GH_Drums_' + pads[0];
+}
+
+// RB: toms (R,Y,B,G uppercase) + cymbals (yCym,bCym,gCym) + kick
+// Cymbal file suffix letters: Y, B, G (same colour as the tom)
+function getRBDrumSpriteName(d) {
+  // Build cymbal string (order: Y, B, G)
+  const cyms = (d.yCym?'Y':'') + (d.bCym?'B':'') + (d.gCym?'G':'');
+  // Build tom string (order: R, Y, B, G)
+  const toms = (d.r?'R':'') + (d.y?'Y':'') + (d.b?'B':'') + (d.g?'G':'');
+  const nc = cyms.length, nt = toms.length;
+
+  if (nc === 0 && nt === 0) return 'RB_Drums_Rest'; // kick handled by its own layer
+
+  if (nc > 0 && nt === 0) {
+    if (nc === 1) return 'RB_Drums_Cymbal_'  + cyms;
+    if (nc === 2) return 'RB_Drums_Cymbal2_' + cyms;
+    return 'RB_Drums_Cymbal_' + cyms[0]; // 3 cymbals — fall back to first
+  }
+
+  if (nc === 0 && nt > 0) {
+    if (nt === 1) return 'RB_Drums_Drums_' + toms;
+    if (nt === 2) return 'RB_Drums_Drums_' + toms;
+    return 'RB_Drums_Drums_' + toms[0]; // 3+ toms — fall back to first
+  }
+
+  // Mixed: 1 cymbal + 1 tom (must not be same colour)
+  if (nc === 1 && nt === 1) {
+    const cv = { Y: ['B','G','R'], B: ['G','R','Y'], G: ['B','R','Y'] };
+    if (cv[cyms]?.includes(toms[0])) {
+      return 'RB_Drums_DrumsCymbals_' + cyms + 'Cym' + toms[0] + 'Tom';
+    }
+    // Same colour cymbal+tom — just show cymbal
+    return 'RB_Drums_Cymbal_' + cyms;
+  }
+
+  // More complex: just show first cymbal or first tom
+  if (nc >= 1) return 'RB_Drums_Cymbal_' + cyms[0];
+  return 'RB_Drums_Drums_' + toms[0];
+}
+
+// =============================================================================
+// UPDATE DISPLAY
+// =============================================================================
+function updateBaseSprite() {
+  let baseName;
+  if (state.drumMode)                       baseName = 'Drums_Base';
+  else if (state.instrumentType === 'keys') baseName = 'Keys_Base';
+  else                                      baseName = 'Guitar_base';
+  if (baseName !== state.currentBaseName) {
+    state.currentBaseName = baseName;
+    layerBody.src = SPRITE_PATH + baseName + '.png';
+  }
+}
+
+function showOverlay(guitarName, source) {
+  if (document.getElementById('artist').style.display === 'flex') return;
+  statusEl.style.display    = 'none';
+  overlayRoot.style.display = 'block';
+  dbgGuitar.textContent  = guitarName || '-';
+  dbgSource.textContent  = source;
+}
+
+function hideOverlay(msg, detail) {
+  if (document.getElementById('artist').style.display === 'flex') return;
+  statusMsg.textContent    = msg;
+  statusDetail.textContent = detail;
+  statusEl.style.display   = 'flex';
+  overlayRoot.style.display = 'none';
+}
+
+function updateDisplay() {
+  const isDrum = state.drumMode === 'gh' || state.drumMode === 'rb';
+  const isKeys = state.instrumentType === 'keys' && !isDrum;
+
+  updateBaseSprite();
+
+  if (isDrum) {
+    // Drum mode: hide hand/strum layers, show drum sprite + mouth
+    layerHand.style.display  = 'none';
+    layerStrum.style.display = 'none';
+
+    // Kick layer — independent of pad layer
+    const kickName = state.drumMode === 'gh' ? 'GH_Drums_Kick' : 'RB_Drums_Kick';
+    if (state.drums.kick) {
+      if (kickName !== state.currentKickSprite) {
+        state.currentKickSprite = kickName;
+        layerDrumKick.src = SPRITE_PATH + kickName + '.png';
+      }
+      layerDrumKick.style.display = 'block';
+    } else {
+      layerDrumKick.style.display = 'none';
+      state.currentKickSprite = '';
+    }
+
+    // Pad layer — always visible in drum mode (Rest when nothing hit)
+    const drumName = state.drumMode === 'gh'
+      ? getGHDrumSpriteName(state.drums)
+      : getRBDrumSpriteName(state.drums);
+
+    if (drumName !== state.currentDrumSprite) {
+      state.currentDrumSprite = drumName;
+      layerDrum.src = SPRITE_PATH + drumName + '.png';
+      layerDrum.style.display = 'block';
+    }
+  } else if (isKeys) {
+    // Keys mode: hand layer shows Keys_* sprite, strum hidden
+    layerHand.style.display  = 'block';
+    layerStrum.style.display = 'none';
+    if (layerDrum.style.display !== 'none') {
+      layerDrum.style.display     = 'none';
+      layerDrumKick.style.display = 'none';
+      state.currentDrumSprite = '';
+      state.currentKickSprite = '';
+    }
+
+    const keyName = getKeySpriteName(state.frets);
+    if (keyName !== state.currentHandSprite) {
+      state.currentHandSprite = keyName;
+      layerHand.src = SPRITE_PATH + keyName + '.png';
+    }
+  } else {
+    // Guitar mode: show hand/strum, hide drum layers
+    layerHand.style.display  = 'block';
+    layerStrum.style.display = 'block';
+    if (layerDrum.style.display !== 'none') {
+      layerDrum.style.display     = 'none';
+      layerDrumKick.style.display = 'none';
+      state.currentDrumSprite = '';
+      state.currentKickSprite = '';
+    }
+
+    const f = state.frets;
+    const handName = getSoloFretSpriteName(state.soloFrets, state.starPower)
+                  || getFretSpriteName(f, state.starPower);
+    if (handName !== state.currentHandSprite) {
+      state.currentHandSprite = handName;
+      // SP sprites live in root sprites/ regardless of player sub-path
+      const spriteSrc = handName.includes('_sp')
+        ? SP_PATH + handName + '.png'
+        : SPRITE_PATH + handName + '.png';
+      layerHand.src = spriteSrc;
+    }
+    if (state.strum !== state.currentStrum) {
+      state.currentStrum = state.strum;
+      layerStrum.src = SPRITE_PATH + 'strum_' + state.strum + '.png';
+    }
+  }
+
+  const f = state.frets;
+  dbgFrets.textContent =
+    (f.g?'G':'-')+(f.r?'R':'-')+(f.y?'Y':'-')+(f.b?'B':'-')+(f.o?'O':'-');
+  dbgStrum.textContent = state.strum;
+  dbgSP.textContent    = state.starPower ? '★ ACTIVE' : 'off';
+  dbgSP.style.color    = state.starPower ? '#ff0' : '#555';
+}
+
+function applyState(frets, strum) {
+  state.frets = frets;
+  state.strum = strum;
+  updateDisplay();
+}
+
+// =============================================================================
+// WEBSOCKET (HID guitars via service)
+// =============================================================================
+// ── PS2 calibration overlay handler (UNTESTED) ────────────────────────────────
+// Receives: { calibrating:true,  step:"green", label:"GREEN fret", device:"..." }
+//           { calibrating:false }
+const CALIB_STEP_ORDER = ['green','red','yellow','blue','orange','strumUp','strumDown','starPower'];
+function handleCalibration(data) {
+  const overlay = document.getElementById('calibrate-overlay');
+  if (!data.calibrating) {
+    overlay.style.display = 'none';
+    return;
+  }
+  overlay.style.display = 'flex';
+  document.getElementById('calibrate-device').textContent = data.device || '';
+  document.getElementById('calibrate-label').textContent  = data.label  || 'Hold still...';
+
+  // Update fret indicators: done = steps before current, active = current step
+  const currentIdx = CALIB_STEP_ORDER.indexOf(data.step);
+  document.querySelectorAll('#calibrate-frets .cal-fret').forEach((el, i) => {
+    el.classList.remove('active', 'done');
+    if (i < currentIdx)  el.classList.add('done');
+    if (i === currentIdx) el.classList.add('active');
+  });
+}
+
+function connectWS() {
+  const ws = new WebSocket(WS_URL);
+
+  ws.addEventListener('open', () => {
+    INPUT.wsConnected = true;
+  });
+
+  ws.addEventListener('message', (e) => {
+    try {
+      const data = JSON.parse(e.data);
+
+      // PS2 calibration messages — handled before player-slot filtering (UNTESTED)
+      if (typeof data.calibrating !== 'undefined') { handleCalibration(data); return; }
+
+      // Multiplayer: ignore messages not intended for this player slot
+      if (typeof data.player !== 'undefined' && data.player !== PLAYER_INDEX) return;
+
+      const hasDrums = !!(data.drumMode);
+
+      if (!data.connected && !hasDrums) {
+        INPUT.wsConnected = false;
+        // Only hide overlay if WS was the active source
+        if (INPUT.activeSource === 'ws') {
+          INPUT.activeSource = null;
+          hideOverlay('Guitar not detected', 'Plug in your guitar');
+        }
+        return;
+      }
+
+      // WS takes priority over gamepad
+      INPUT.activeSource = 'ws';
+      state.instrumentType = data.instrumentType || 'guitar';
+      const displayName = hasDrums
+        ? `Drum Kit (${data.drumMode.toUpperCase()})`
+        : state.instrumentType === 'keys'
+          ? `Keys (${data.guitarName || 'Unknown'})`
+          : (data.guitarName || 'Unknown');
+      showOverlay(displayName, 'HID service');
+
+      state.soloFrets  = { g: !!data.soloG, r: !!data.soloR, y: !!data.soloY, b: !!data.soloB, o: !!data.soloO };
+      state.starPower  = !!data.starPower;
+      state.drumMode   = data.drumMode || '';
+      state.drums     = {
+        kick: !!data.kick,
+        r:    !!data.drumR,
+        y:    !!data.drumY,
+        b:    !!data.drumB,
+        g:    !!data.drumG,
+        o:    !!data.drumO,
+        yCym: !!data.drumYCym,
+        bCym: !!data.drumBCym,
+        gCym: !!data.drumGCym,
+      };
+      applyState(
+        { g: !!data.g, r: !!data.r, y: !!data.y, b: !!data.b, o: !!data.o },
+        data.strum || 'neutral'
+      );
+      layerMouth.src = SPRITE_PATH + (data.mouthOpen ? 'mouth_open' : 'mouth_closed') + '.png';
+    } catch(e) { console.error('WS parse error:', e); }
+  });
+
+  ws.addEventListener('close', () => {
+    INPUT.wsConnected = false;
+    if (INPUT.activeSource === 'ws') {
+      INPUT.activeSource = null;
+      hideOverlay('Service disconnected', 'Reconnecting...');
+    }
+    setTimeout(connectWS, RECONNECT_MS);
+  });
+
+  ws.addEventListener('error', () => {});
+}
+
+// =============================================================================
+// GAMEPAD API (XInput guitars)
+// Only used if WS service is not providing input
+// =============================================================================
+window.addEventListener('gamepadconnected', (e) => {
+  console.log('Gamepad connected:', e.gamepad.id);
+  if (INPUT.gamepadIndex === null) {
+    INPUT.gamepadIndex = e.gamepad.index;
+  }
+});
+
+window.addEventListener('gamepaddisconnected', (e) => {
+  if (INPUT.gamepadIndex === e.gamepad.index) {
+    INPUT.gamepadIndex = null;
+    if (INPUT.activeSource === 'gamepad') {
+      INPUT.activeSource = null;
+      hideOverlay('Guitar disconnected', 'Plug in your guitar');
+    }
+  }
+});
+
+// Check for existing gamepad on load
+const existing = navigator.getGamepads();
+for (let i = 0; i < existing.length; i++) {
+  if (existing[i]) { INPUT.gamepadIndex = existing[i].index; break; }
+}
+
+function pollGamepad() {
+  // Don't poll if WS service has an active guitar
+  if (INPUT.wsConnected && INPUT.activeSource === 'ws') return;
+  if (INPUT.gamepadIndex === null) return;
+
+  const gp = navigator.getGamepads()[INPUT.gamepadIndex];
+  if (!gp) { INPUT.gamepadIndex = null; return; }
+
+  const btns = gp.buttons;
+  const axes  = gp.axes;
+
+  const newFrets = {
+    g: btns[XINPUT_MAP.green]?.pressed  ?? false,
+    r: btns[XINPUT_MAP.red]?.pressed    ?? false,
+    y: btns[XINPUT_MAP.yellow]?.pressed ?? false,
+    b: btns[XINPUT_MAP.blue]?.pressed   ?? false,
+    o: btns[XINPUT_MAP.orange]?.pressed ?? false,
+  };
+
+  // Strum axis
+  const v = axes[XINPUT_MAP.strumAxis] ?? 0;
+  const t = XINPUT_MAP.strumTolerance;
+  const isUp   = Math.abs(v - XINPUT_MAP.strumUpValue)   < t;
+  const isDown = Math.abs(v - XINPUT_MAP.strumDownValue) < t;
+  const isOpen = v > XINPUT_MAP.strumOpenDeadzone;
+
+  dbgAxis.textContent = v.toFixed(5);
+
+  let newStrum = state.strum;
+  if (isUp && prevAxisStrum !== 'up') {
+    prevAxisStrum = 'up'; newStrum = 'up';
+  } else if (isDown && prevAxisStrum !== 'down') {
+    prevAxisStrum = 'down'; newStrum = 'down';
+  } else if (isOpen && prevAxisStrum !== 'open') {
+    prevAxisStrum = 'open'; newStrum = 'neutral';
+  }
+
+  const fretsChanged =
+    newFrets.g !== state.frets.g || newFrets.r !== state.frets.r ||
+    newFrets.y !== state.frets.y || newFrets.b !== state.frets.b ||
+    newFrets.o !== state.frets.o;
+
+  const strumChanged = newStrum !== state.strum;
+
+  if (fretsChanged || strumChanged) {
+    INPUT.activeSource = 'gamepad';
+    showOverlay(gp.id.slice(0, 24), 'XInput');
+    applyState(newFrets, newStrum);
+  } else if (INPUT.activeSource === null && INPUT.gamepadIndex !== null) {
+    // Gamepad connected but no input yet — show overlay anyway
+    INPUT.activeSource = 'gamepad';
+    showOverlay(gp.id.slice(0, 24), 'XInput');
+    applyState(newFrets, newStrum);
+  }
+}
+
+// =============================================================================
+// ARTIST MODE
+// =============================================================================
+let artistLayerVisible = { body: true, hand: true, strum: true, drumKick: true, drum: true, mouth: true };
+let artistIdx     = 0;
+let artistMode    = 'guitar';
+let artistSprites = [...HAND_SPRITES, ...SOLO_SPRITES];
+
+function isDrumSprite(name) {
+  return name.startsWith('GH_Drums_') || name.startsWith('RB_Drums_');
+}
+
+function isKeySprite(name) {
+  return name.startsWith('Keys_');
+}
+
+function getSpriteLabel(name) {
+  if (name.startsWith('solo_fret_'))              return 'solo:' + name.slice(10);
+  if (name.startsWith('fret_'))                   return name.slice(5) || 'open';
+  if (name.startsWith('Keys_'))                   return 'keys:' + name.slice(5);
+  if (name.startsWith('GH_Drums_'))               return 'GH:' + name.slice(9);
+  if (name.startsWith('RB_Drums_DrumsCymbals_'))  return 'RB:' + name.slice(22);
+  if (name.startsWith('RB_Drums_Cymbal2_'))        return 'RB:c2:' + name.slice(17);
+  if (name.startsWith('RB_Drums_Cymbal_'))          return 'RB:cym:' + name.slice(16);
+  if (name.startsWith('RB_Drums_Drums_'))           return 'RB:' + name.slice(15);
+  if (name.startsWith('RB_Drums_'))                return 'RB:' + name.slice(9);
+  return name;
+}
+
+function openArtistMode() {
+  const bodyImg = new Image();
+  bodyImg.onload = () => {
+    const w = bodyImg.naturalWidth  || 200;
+    const h = bodyImg.naturalHeight || 200;
+    const preview = document.getElementById('artist-preview');
+    preview.style.width  = w + 'px';
+    preview.style.height = h + 'px';
+    document.getElementById('artist-size').textContent = `${w} × ${h}`;
+  };
+  bodyImg.src = SPRITE_PATH + 'Guitar_base.png';
+
+  document.getElementById('artist').style.display = 'flex';
+  statusEl.style.display    = 'none';
+  overlayRoot.style.display = 'none';
+  artistSetMode('guitar');
+}
+
+// Switch artist mode — controls which layer rows are visible, which sprites populate
+// the grid/dropdowns, and what the Prev/Next arrows navigate through.
+function artistSetMode(mode) {
+  artistMode = mode;
+
+  // Which sprite list to navigate
+  if (mode === 'drums')     artistSprites = DRUM_SPRITES;
+  else if (mode === 'keys') artistSprites = KEYS_SPRITES;
+  else                      artistSprites = [...HAND_SPRITES, ...SOLO_SPRITES];
+
+  // Sync sel-body dropdown to the chosen mode
+  const selBody = document.getElementById('sel-body');
+  if      (mode === 'drums') selBody.value = 'sprites/Drums_Base.png';
+  else if (mode === 'keys')  selBody.value = 'sprites/Keys_Base.png';
+  else                       selBody.value = 'sprites/Guitar_base.png';
+
+  // Show/hide contextual layer rows
+  document.getElementById('row-hand')    .style.display = (mode !== 'drums') ? 'flex' : 'none';
+  document.getElementById('row-strum')   .style.display = (mode === 'guitar') ? 'flex' : 'none';
+  document.getElementById('row-drumKick').style.display = (mode === 'drums')  ? 'flex' : 'none';
+  document.getElementById('row-drum')    .style.display = (mode === 'drums')  ? 'flex' : 'none';
+
+  // Contextual label for the fret/keys row
+  document.getElementById('label-hand').textContent = mode === 'keys' ? 'Keys' : 'Fret';
+
+  // Update sprite grid heading
+  const headings = { guitar: 'Guitar Sprites', drums: 'Drum Sprites', keys: 'Key Sprites' };
+  document.getElementById('sprite-grid-heading').textContent = headings[mode] || 'Sprites';
+
+  // Repopulate the hand/keys dropdown
+  const selHand = document.getElementById('sel-hand');
+  selHand.innerHTML = '';
+  (mode === 'keys' ? KEYS_SPRITES : [...HAND_SPRITES, ...SOLO_SPRITES]).forEach(name => {
+    const opt = document.createElement('option');
+    opt.value = SPRITE_PATH + name + '.png';
+    opt.textContent = name + '.png';
+    selHand.appendChild(opt);
+  });
+
+  // Repopulate the drum/hits dropdown
+  const selDrum = document.getElementById('sel-drum');
+  selDrum.innerHTML = '';
+  DRUM_SPRITES.forEach(name => {
+    const opt = document.createElement('option');
+    opt.value = SPRITE_PATH + name + '.png';
+    opt.textContent = name + '.png';
+    selDrum.appendChild(opt);
+  });
+
+  // Reset to first sprite and rebuild grid
+  artistIdx = 0;
+  rebuildSpriteGrid();
+  artistRender();
+}
+
+function artistBodyChanged() {
+  const val = document.getElementById('sel-body').value;
+  const mode = val.includes('Drums') ? 'drums' : val.includes('Keys') ? 'keys' : 'guitar';
+  artistSetMode(mode);
+}
+
+function rebuildSpriteGrid() {
+  const grid = document.getElementById('sprite-grid');
+  grid.innerHTML = '';
+  artistSprites.forEach((name, i) => {
+    const div = document.createElement('div');
+    div.className = 'sprite-thumb' + (i === artistIdx ? ' active' : '');
+    div.textContent = getSpriteLabel(name);
+    div.onclick = () => artistJumpTo(i);
+    div.id = `thumb-${i}`;
+    grid.appendChild(div);
+  });
+}
+
+function closeArtistMode() {
+  document.getElementById('artist').style.display = 'none';
+  if (INPUT.activeSource) {
+    overlayRoot.style.display = 'block';
+  } else {
+    statusEl.style.display = 'flex';
+  }
+}
+
+function toggleLayer(layer) {
+  artistLayerVisible[layer] = !artistLayerVisible[layer];
+  const btn = document.getElementById(`tog-${layer}`);
+  btn.className = 'layer-toggle ' + (artistLayerVisible[layer] ? 'on' : 'off');
+  btn.textContent = artistLayerVisible[layer] ? '👁' : '—';
+  artistRender();
+}
+
+function artistJumpTo(idx) {
+  const oldThumb = document.getElementById(`thumb-${artistIdx}`);
+  if (oldThumb) oldThumb.className = 'sprite-thumb';
+  artistIdx = idx;
+  const newThumb = document.getElementById(`thumb-${artistIdx}`);
+  if (newThumb) { newThumb.className = 'sprite-thumb active'; newThumb.scrollIntoView({ block: 'nearest' }); }
+  // Sync the correct dropdown
+  const name = artistSprites[artistIdx];
+  if (isDrumSprite(name)) {
+    document.getElementById('sel-drum').value = SPRITE_PATH + name + '.png';
+  } else {
+    document.getElementById('sel-hand').value = SPRITE_PATH + name + '.png';
+  }
+  artistRender();
+}
+
+function artistNext() { artistJumpTo((artistIdx + 1) % artistSprites.length); }
+function artistPrev() { artistJumpTo((artistIdx - 1 + artistSprites.length) % artistSprites.length); }
+
+function artistUpdatePreview() {
+  const selHand = document.getElementById('sel-hand');
+  const idx = artistSprites.findIndex(n => SPRITE_PATH + n + '.png' === selHand.value);
+  if (idx >= 0) artistJumpTo(idx); else artistRender();
+}
+
+function artistUpdateDrum() {
+  const selDrum = document.getElementById('sel-drum');
+  const idx = artistSprites.findIndex(n => SPRITE_PATH + n + '.png' === selDrum.value);
+  if (idx >= 0) artistJumpTo(idx); else artistRender();
+}
+
+function artistRender() {
+  const apBody     = document.getElementById('ap-body');
+  const apHand     = document.getElementById('ap-hand');
+  const apStrum    = document.getElementById('ap-strum');
+  const apDrumKick = document.getElementById('ap-drum-kick');
+  const apDrum     = document.getElementById('ap-drum');
+  const apMouth    = document.getElementById('ap-mouth');
+
+  const name   = artistSprites[artistIdx];
+  const isDrum = isDrumSprite(name);
+  const isKeys = isKeySprite(name);
+
+  apBody.style.display = artistLayerVisible.body ? 'block' : 'none';
+  if (isDrum)      apBody.src = SPRITE_PATH + 'Drums_Base.png';
+  else if (isKeys) apBody.src = SPRITE_PATH + 'Keys_Base.png';
+  else             apBody.src = SPRITE_PATH + 'Guitar_base.png';
+  // Sync the dropdown so it reflects the auto-chosen base
+  document.getElementById('sel-body').value = apBody.src.includes('Drums') ? 'sprites/Drums_Base.png'
+    : apBody.src.includes('Keys') ? 'sprites/Keys_Base.png' : 'sprites/Guitar_base.png';
+
+  if (isDrum) {
+    // Drum sprite — show drum layers, hide hand/strum
+    apHand.style.display  = 'none';
+    apStrum.style.display = 'none';
+    // Kick layer: auto-pick GH or RB kick based on current sprite family
+    const kickName = name.startsWith('GH_Drums_') ? 'GH_Drums_Kick' : 'RB_Drums_Kick';
+    apDrumKick.src          = SPRITE_PATH + kickName + '.png';
+    apDrumKick.style.display = artistLayerVisible.drumKick ? 'block' : 'none';
+    // Pad layer
+    apDrum.style.display  = artistLayerVisible.drum ? 'block' : 'none';
+    apDrum.src = SPRITE_PATH + name + '.png';
+  } else if (isKeys) {
+    // Keys sprite — show hand/strum hidden, drum layers hidden
+    apDrumKick.style.display = 'none';
+    apDrum.style.display     = 'none';
+    apHand.style.display     = artistLayerVisible.hand ? 'block' : 'none';
+    apHand.src               = SPRITE_PATH + name + '.png';
+    apStrum.style.display    = 'none';
+  } else {
+    apDrumKick.style.display = 'none';
+    // Guitar sprite — show hand/strum, hide drum layer
+    apDrum.style.display = 'none';
+    apHand.style.display = artistLayerVisible.hand ? 'block' : 'none';
+    apHand.src = SPRITE_PATH + name + '.png';
+
+    const strumVal = document.getElementById('sel-strum').value;
+    if (!artistLayerVisible.strum) {
+      apStrum.style.display = 'none';
+    } else {
+      apStrum.src = strumVal || SPRITE_PATH + 'strum_neutral.png';
+      apStrum.style.display = 'block';
+    }
+  }
+
+  apMouth.style.display = artistLayerVisible.mouth ? 'block' : 'none';
+  apMouth.src = document.getElementById('sel-mouth').value;
+
+  document.getElementById('artist-sprite-name').textContent = name + '.png';
+  document.getElementById('artist-counter').textContent = `${artistIdx + 1} / ${artistSprites.length}`;
+}
+
+document.addEventListener('keydown', (e) => {
+  if (document.getElementById('artist').style.display === 'flex') {
+    if (e.key === 'ArrowRight') artistNext();
+    if (e.key === 'ArrowLeft')  artistPrev();
+    if (e.key === 'Escape')     closeArtistMode();
+  }
+});
+
+// =============================================================================
+// MAIN LOOP
+// =============================================================================
+function loop() {
+  pollGamepad();
+  requestAnimationFrame(loop);
+}
+
+// Apply SPRITE_PATH to any hardcoded sprite srcs / dropdown values
+(function initSpritePaths() {
+  // Live overlay initial sources
+  layerBody.src  = SPRITE_PATH + 'Guitar_base.png';
+  layerHand.src  = SPRITE_PATH + 'fret_open.png';
+  layerStrum.src = SPRITE_PATH + 'strum_neutral.png';
+  layerMouth.src = SPRITE_PATH + 'mouth_closed.png';
+  // Artist mode strum + mouth dropdown option values
+  document.querySelectorAll('#sel-strum option, #sel-mouth option').forEach(opt => {
+    opt.value = opt.value.replace('sprites/', SPRITE_PATH);
+  });
+})();
+
+// Start both input paths
+connectWS();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

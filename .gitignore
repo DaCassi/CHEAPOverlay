@@ -1,0 +1,25 @@
+# Build output
+bin/
+obj/
+src/
+service/
+tmp/
+
+# Install state
+install_state.cfg
+
+# Visual Studio / Rider
+.vs/
+*.user
+*.suo
+
+# dotnet
+*.nupkg
+project.lock.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Claude
+.claude/

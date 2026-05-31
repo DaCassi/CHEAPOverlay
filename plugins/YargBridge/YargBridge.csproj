@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net46</TargetFramework>
+    <AssemblyName>CHEAPOverlay.YargBridge</AssemblyName>
+    <RootNamespace>CHEAPOverlay.YargBridge</RootNamespace>
+    <Nullable>enable</Nullable>
+    <LangVersion>9</LangVersion>
+    <!-- Set YargDir to your YARG installation folder, e.g.:
+         dotnet build -p:YargDir="C:\Games\YARG"
+         or set the YARG_DIR environment variable. -->
+    <YargDir Condition="'$(YargDir)'=='' and '$(YARG_DIR)'!=''">$(YARG_DIR)</YargDir>
+    <YargManaged>$(YargDir)\YARG_Data\Managed</YargManaged>
+  </PropertyGroup>
+
+  <!-- BepInEx 5.x core (Mono Unity build) -->
+  <ItemGroup>
+    <PackageReference Include="BepInEx.Analyzers"  Version="1.*" PrivateAssets="all" />
+    <PackageReference Include="BepInEx.Core"       Version="5.*" PrivateAssets="all" />
+    <!-- Unity stubs so the compiler can resolve MonoBehaviour, etc. -->
+    <PackageReference Include="UnityEngine.Modules" Version="2021.3.29" PrivateAssets="all" />
+  </ItemGroup>
+
+  <!--
+    Game assemblies — pulled from your local YARG install.
+    Set YargDir (or YARG_DIR env var) before building.
+    Copy the following DLLs from <YargDir>\YARG_Data\Managed\ if you
+    prefer to keep them inside this folder for a fully offline build:
+      Assembly-CSharp.dll
+      YARG.Core.Package.dll
+  -->
+  <ItemGroup Condition="'$(YargManaged)'!=''">
+    <Reference Include="Assembly-CSharp">
+      <HintPath>$(YargManaged)\Assembly-CSharp.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="YARG.Core.Package">
+      <HintPath>$(YargManaged)\YARG.Core.Package.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+</Project>

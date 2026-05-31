@@ -1,0 +1,80 @@
+CHEAP Overlay License
+Copyright (c) 2026 Cassi
+
+Permission is hereby granted to any person obtaining a copy of this software
+and associated files (the "Software") to use, copy, modify, and distribute it,
+subject to the following conditions:
+
+1. ATTRIBUTION
+   All copies, forks, and derivative works must retain this license and clearly
+   credit the original project:
+       CHEAP Overlay by Cassi
+       https://github.com/DaCassi/CHEAPOverlay
+
+2. FORK NAMING
+   Any publicly distributed fork or derivative work must be named in the format:
+       Cassi's Hyperspecific Extremely Arbitrary Portable Overlay [Your Name] Edition
+   where [Your Name] is replaced with the forker's name or handle.
+   The full name may be abbreviated to "CHEAPO [Your Name] Edition" in UI and
+   filenames, but the full name must appear in the repository description or README.
+
+3. RIGHT OF INCORPORATION
+   The original author (Cassi) reserves the right to merge, adapt, or incorporate
+   any fork or derivative work — in whole or in part — into the main CHEAP Overlay
+   project, with the explicit prior consent of the forker. The original author will
+   reach out to the forker before incorporating any of their work, and will not
+   proceed without acknowledgement. In the event of such incorporation, full credit
+   will be given to the contributing forker by name for all incorporated features
+   or changes. This right does not transfer ownership of the forker's contributions;
+   the forker retains authorship credit in perpetuity.
+
+4. NO SUBLICENSING
+   You may not sublicense this software or any derivative work under different
+   terms. Any fork or derivative work must be distributed under this same license,
+   unmodified. This ensures the conditions above — including attribution, naming,
+   and incorporation rights — cannot be stripped by downstream redistribution.
+
+5. SHARE-ALIKE
+   Any fork or derivative work must be released under this exact license. You may
+   not add restrictions beyond those stated here, nor remove any existing ones.
+
+6. NON-COMMERCIAL
+   This software and any derivative works may not be sold, bundled into paid
+   products, or used for commercial gain without explicit written permission from
+   the original author (Cassi).
+
+   Content creation is explicitly and fully permitted, including but not limited
+   to: streaming on any platform (Twitch, YouTube, Kick, etc.), monetized videos,
+   sponsored streams, and any other creative media — regardless of whether that
+   content generates income. You are encouraged to use this overlay on stream.
+
+   What is not permitted: selling the software itself, bundling it into a paid
+   product, offering it as part of a paid service, or using it as a component in
+   commercial software.
+
+7. MODIFICATION MARKING
+   Any fork or derivative work must clearly identify itself as a modified version
+   of CHEAP Overlay. This must appear in the repository README and any distributed
+   documentation. You may not present a fork as the original project or imply
+   official endorsement by the original author.
+
+8. PRIVACY
+   This software reads process memory exclusively from YARG (yarg.exe) and
+   GH World Tour: Definitive Edition (GHWT_Definitive.exe) for the sole purpose
+   of detecting in-game star power state. No data is collected, stored, transmitted,
+   or sent to any external server or to the author. All communication is strictly
+   local (localhost only). Forks must disclose any additional processes they read
+   or any data they transmit.
+
+9. TERMINATION
+   Any violation of the terms of this license automatically and immediately
+   terminates your rights to use, copy, modify, or distribute this software.
+   Upon termination you must cease all use and destroy any copies in your
+   possession. Cassi reserves the right to reinstate your license at her
+   discretion if the violation is corrected. Also, violating these terms makes
+   you a real meanie and you should feel bad about it.
+
+10. NO WARRANTY
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY CLAIM, DAMAGES, OR
+   OTHER LIABILITY ARISING FROM USE OF THE SOFTWARE.
