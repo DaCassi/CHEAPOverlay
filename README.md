@@ -1,2 +1,46 @@
 # CHEAPOverlay
-A Sprite Based Input Overlay for Guitar hero and rock band adjacent rhythm games.
+A Sprite Based Input Overlay for Guitar Hero and Rock Band adjacent rhythm games.
+Originally set out to build a sprite based input overlay for personal projects and fell into scope creep and eventually now we're here.
+
+## What the heck does this do
+
+CHEAPOverlay is really cool. it does a bunch of nerd stuff and basically any instrument you plug in (some exceptions) will show up as a live sprite-based input display. it also supports up to 4 different instruments at once, and voice detection.
+
+under the hood it's polling XInput, HID, MIDI, PS2 adapters, and reading process memory from YARG and GHWTDE all at the same time and throwing it all at a WebSocket that your OBS browser source connects to. it's fine.
+
+## How to install
+
+1. download and unzip (or clone the repo)
+2. run `install.bat` as administrator
+3. follow the prompts — it'll grab .NET if you don't have it and compile the service on your machine
+4. optionally install the YARG plugin for star power detection
+5. add `cheapoverlay.html` to OBS as a Browser Source with **Page Transparency** enabled
+6. plug in your instruments
+
+the service starts automatically on boot. run `uninstall.bat` to remove everything.
+
+## Supported inputs
+
+- XInput (most modern controllers)
+- HID (older guitars, weird adapters)
+- MIDI (keyboards, drum pads)
+- PS2 adapters
+- Microphone / voice detection
+
+## what's not supported
+
+EVERY GAMEINPUT DEVICE. BASTARD API. HEADACHE PRODUCER
+
+RB3DX. Was in the works. proved to be too difficult, may revisit.
+
+Clone Hero. Also just difficult to read from, may revisit.
+
+## Acknowledgements
+
+- **[YellowDogMan](https://github.com/YellowDogMan)** — [RRNoise.NET](https://www.nuget.org/packages/YellowDogMan.RRNoise.NET), which powers the voice detection
+- **[Sanjay900](https://github.com/Sanjay900)** — cool guy, go check out [Santroller](https://github.com/Sanjay900/Santroller)
+- **[Nathannator](https://github.com/Nathannator)** — [plastic-band](https://github.com/Nathannator/plastic-band), an incredibly useful reference for instrument input data
+
+## License
+
+see [LICENSE](LICENSE). forks are welcome but there are naming and attribution rules, give it a read.
