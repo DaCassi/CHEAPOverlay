@@ -23,6 +23,10 @@ the service starts automatically on boot. run `uninstall.bat` to remove everythi
 
 this program does support multiple instruments. in your obs display follow the html file with ?player=n, where n is the player being tracked, starting at 0. it supports up to 4 players simultaneously.
 
+## Sprites
+
+the big focal point of this program is the sprites. you can set your own sprites. if you don't have the service running, you can use the html as a browser file and enter artist mode, this allows you to display all the sprites in the program.
+
 ## Supported inputs
 
 - XInput (most modern controllers)
