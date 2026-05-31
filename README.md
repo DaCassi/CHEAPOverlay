@@ -19,6 +19,10 @@ under the hood it's polling XInput, HID, MIDI, PS2 adapters, and reading process
 
 the service starts automatically on boot. run `uninstall.bat` to remove everything.
 
+## Multiplayer
+
+this program does support multiple instruments. in your obs display follow the html file with ?player=n, where n is the player being tracked, starting at 0. it supports up to 4 players simultaneously.
+
 ## Supported inputs
 
 - XInput (most modern controllers)
