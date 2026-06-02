@@ -190,8 +190,8 @@ if exist "!YARG_DIR!\BepInEx\plugins" (
 ) else (
     echo.
     echo  BepInEx not found. Downloading latest BepInEx 5.x...
-    set BEPINEX_SCRIPT=%TMPDIR%\get_bepinex.ps1
-    set BEPINEX_ZIP=%TMPDIR%\bepinex.zip
+    set BEPINEX_SCRIPT=!TMPDIR!\get_bepinex.ps1
+    set BEPINEX_ZIP=!TMPDIR!\bepinex.zip
     set YARG_DIR_COPY=!YARG_DIR!
     (
         echo $ErrorActionPreference = 'Stop'
@@ -201,17 +201,16 @@ if exist "!YARG_DIR!\BepInEx\plugins" (
         echo if ^(-not $rel^) { throw 'No BepInEx 5.x stable release found' }
         echo $asset = $rel.assets ^| Where-Object { $_.name -match '^BepInEx_win_x64_' } ^| Select-Object -First 1
         echo if ^(-not $asset^) { throw 'No win_x64 asset in that release' }
-        echo Invoke-WebRequest $asset.browser_download_url -OutFile '%BEPINEX_ZIP%' -UseBasicParsing
-        echo Expand-Archive '%BEPINEX_ZIP%' -DestinationPath '%YARG_DIR_COPY%' -Force
-        echo # Expand-Archive sometimes creates BepInEx\plugins as a file instead of a directory
-        echo \$plg = Join-Path '%YARG_DIR_COPY%' 'BepInEx\plugins'
-        echo if ^(Test-Path \$plg -PathType Leaf^) { Remove-Item \$plg -Force }
-        echo if ^(-not ^(Test-Path \$plg^)^) { New-Item -ItemType Directory -Path \$plg -Force ^| Out-Null }
+        echo Invoke-WebRequest $asset.browser_download_url -OutFile '!BEPINEX_ZIP!' -UseBasicParsing
+        echo Expand-Archive '!BEPINEX_ZIP!' -DestinationPath '!YARG_DIR_COPY!' -Force
+        echo $plg = Join-Path '!YARG_DIR_COPY!' 'BepInEx\plugins'
+        echo if ^(Test-Path $plg -PathType Leaf^) { Remove-Item $plg -Force }
+        echo if ^(-not ^(Test-Path $plg^)^) { New-Item -ItemType Directory -Path $plg -Force ^| Out-Null }
         echo Write-Host ^('[OK] BepInEx ' + $rel.tag_name + ' installed'^)
-    ) > "%BEPINEX_SCRIPT%"
-    powershell -NoProfile -ExecutionPolicy Bypass -File "%BEPINEX_SCRIPT%"
-    del "%BEPINEX_SCRIPT%" >nul 2>&1
-    del "%BEPINEX_ZIP%"    >nul 2>&1
+    ) > "!BEPINEX_SCRIPT!"
+    powershell -NoProfile -ExecutionPolicy Bypass -File "!BEPINEX_SCRIPT!"
+    del "!BEPINEX_SCRIPT!" >nul 2>&1
+    del "!BEPINEX_ZIP!"    >nul 2>&1
     if not exist "!YARG_DIR!\BepInEx\plugins" (
         echo  [!!] BepInEx installation failed.
         echo       Skipping YARG plugin.
