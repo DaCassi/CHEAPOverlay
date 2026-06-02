@@ -5,76 +5,299 @@ Permission is hereby granted to any person obtaining a copy of this software
 and associated files (the "Software") to use, copy, modify, and distribute it,
 subject to the following conditions:
 
+───────────────────────────────────────────────
+DEFINITIONS
+───────────────────────────────────────────────
+
+"Publicly Distributed" means made available to any person outside the
+  recipient's own personal use, including but not limited to: publishing to a
+  code repository, offering a download, distributing as part of a stream setup
+  package, or sharing via any public or semi-public channel.
+
+"Fork" means any copy of the Software that has been modified and Publicly
+  Distributed, regardless of the degree of modification.
+
+"Derivative Work" means any work that incorporates, adapts, or is substantially
+  derived from the Software or any Fork thereof. A work is "substantially
+  derived" if it reuses a material portion of the Software's code, logic, or
+  structure — not merely its general concept or publicly documented behavior.
+  Reimplementations written independently from scratch are not Derivative Works.
+
+"Commercial Use" means any use in which the Software, a Fork, or a Derivative
+  Work is itself the product being sold, licensed, or monetized — including but
+  not limited to: selling the Software or a modified version of it; bundling it
+  into a paid product or service; offering it as a component of a commercial
+  SaaS or hosted platform; or using it as the primary draw or functional
+  centerpiece of a product or service from which revenue is derived. Commercial
+  Use does not include using the Software as a tool while producing content that
+  generates income (see Section 6), nor does it include incidental use of the
+  Software alongside unrelated commercial activity.
+
+"Documented Consent" means written confirmation from the relevant party,
+  retained in a reasonably accessible form (e.g., a GitHub issue, email, or
+  public message thread), that they agree to the described use of their work.
+
+"Attribution" means crediting the original project and its author(s) by name
+  in a location reasonably visible to users or recipients of the software —
+  such as the repository README, an About screen, or distributed documentation.
+
+"Full Attribution" means crediting a specific contributor at the point of their
+  contribution — as close to the incorporated work as practical. For code, this
+  means an inline comment directly above or within the relevant block or
+  function. For other incorporated work, it means a changelog entry, commit
+  message, or equivalent source-proximate record. A name appearing only in a
+  general acknowledgements list does not constitute Full Attribution. Full
+  Attribution says: this specific thing came from this specific person.
+
+  Where a block or function has been materially contributed to by multiple
+  people over time, Full Attribution may credit the most recent substantive
+  author with a reference to version history (e.g., "last substantive author:
+  [Name]; see git log for full lineage"). This is the minimum acceptable form
+  when contribution lineage is genuinely complex; it does not excuse omitting
+  attribution entirely.
+
+───────────────────────────────────────────────
 1. ATTRIBUTION
-   All copies, forks, and derivative works must retain this license and clearly
-   credit the original project:
-       CHEAP Overlay by Cassi
-       https://github.com/DaCassi/CHEAPOverlay
+───────────────────────────────────────────────
 
+All copies, Forks, and Derivative Works must retain this license and provide
+Attribution to the original project:
+
+    CHEAP Overlay by Cassi
+    https://github.com/DaCassi/CHEAPOverlay
+
+Where a Fork incorporates contributions from other parties (see Section 3),
+those contributors must receive Full Attribution for their incorporated work.
+All Attribution and Full Attribution credit is retained in perpetuity and may
+not be removed by any downstream redistribution.
+
+───────────────────────────────────────────────
 2. FORK NAMING
-   Any publicly distributed fork or derivative work must be named in the format:
-       Cassi's Hyperspecific Extremely Arbitrary Portable Overlay [Your Name] Edition
-   where [Your Name] is replaced with the forker's name or handle.
-   The full name may be abbreviated to "CHEAPO [Your Name] Edition" in UI and
-   filenames, but the full name must appear in the repository description or README.
+───────────────────────────────────────────────
 
-3. RIGHT OF INCORPORATION
-   The original author (Cassi) reserves the right to merge, adapt, or incorporate
-   any fork or derivative work — in whole or in part — into the main CHEAP Overlay
-   project, with the explicit prior consent of the forker. The original author will
-   reach out to the forker before incorporating any of their work, and will not
-   proceed without acknowledgement. In the event of such incorporation, full credit
-   will be given to the contributing forker by name for all incorporated features
-   or changes. This right does not transfer ownership of the forker's contributions;
-   the forker retains authorship credit in perpetuity.
+Any Publicly Distributed Fork or Derivative Work must be named in the format:
 
-4. NO SUBLICENSING
-   You may not sublicense this software or any derivative work under different
-   terms. Any fork or derivative work must be distributed under this same license,
-   unmodified. This ensures the conditions above — including attribution, naming,
-   and incorporation rights — cannot be stripped by downstream redistribution.
+    Cassi's Hyperspecific Extremely Arbitrary Portable Overlay [Your Name] Edition
 
-5. SHARE-ALIKE
-   Any fork or derivative work must be released under this exact license. You may
-   not add restrictions beyond those stated here, nor remove any existing ones.
+where [Your Name] is replaced with the forker's own name, handle, username,
+or other public identifier. For forks maintained by a team or organization,
+[Your Name] may be a shared team name, organization name, or group identifier
+— provided it clearly identifies who is responsible for the fork. [Your Name]
+is not an arbitrary project title; it identifies the fork maintainer(s).
 
-6. NON-COMMERCIAL
-   This software and any derivative works may not be sold, bundled into paid
-   products, or used for commercial gain without explicit written permission from
-   the original author (Cassi).
+The full name may be abbreviated to "CHEAPO [Your Name] Edition" in UI
+elements and filenames. The full name must appear in the repository description
+or README.
 
-   Content creation is explicitly and fully permitted, including but not limited
-   to: streaming on any platform (Twitch, YouTube, Kick, etc.), monetized videos,
-   sponsored streams, and any other creative media — regardless of whether that
-   content generates income. You are encouraged to use this overlay on stream.
+Fork maintainers are expected to stand behind their modifications. This naming
+convention ensures users can distinguish the original project from derivative
+versions and clearly identify who is responsible for a given fork's behavior.
+It reflects the same principle that runs throughout this license: people should
+not be separated from the work they created or maintain.
 
-   What is not permitted: selling the software itself, bundling it into a paid
-   product, offering it as part of a paid service, or using it as a component in
-   commercial software.
+───────────────────────────────────────────────
+3. RIGHT OF INCORPORATION AND CONTRIBUTOR PROTECTIONS
+───────────────────────────────────────────────
 
-7. MODIFICATION MARKING
-   Any fork or derivative work must clearly identify itself as a modified version
-   of CHEAP Overlay. This must appear in the repository README and any distributed
-   documentation. You may not present a fork as the original project or imply
-   official endorsement by the original author.
+The original author (Cassi) reserves the right to merge, adapt, or incorporate
+any Fork or Derivative Work — in whole or in part — into the main CHEAP Overlay
+project, subject to the following conditions:
 
-8. PRIVACY
-   This software reads process memory exclusively from YARG (yarg.exe) and
-   GH World Tour: Definitive Edition (GHWT_Definitive.exe) for the sole purpose
-   of detecting in-game star power state. No data is collected, stored, transmitted,
-   or sent to any external server or to the author. All communication is strictly
-   local (localhost only). Forks must disclose any additional processes they read
-   or any data they transmit.
+  (a) Documented Consent from the fork maintainer must be obtained before any
+      incorporation of their work begins. The original author will not proceed
+      without it. Consent is specific to the work described at the time it is
+      given; it does not extend to future work or to uses not described in the
+      original request.
 
-9. TERMINATION
-   Any violation of the terms of this license automatically and immediately
-   terminates your rights to use, copy, modify, or distribute this software.
-   Upon termination you must cease all use and destroy any copies in your
-   possession. Cassi reserves the right to reinstate your license at her
-   discretion if the violation is corrected. Also, violating these terms makes
-   you a real meanie and you should feel bad about it.
+      By giving Documented Consent, the fork maintainer warrants that they have
+      the authority to authorize incorporation of the submitted work — including
+      any contributions made to their fork by others. It is the fork
+      maintainer's responsibility to ensure they hold or have obtained the
+      necessary rights from their own contributors before granting consent. The
+      original author relies on this warranty in good faith and bears no
+      liability for disputes arising from a fork maintainer's failure to clear
+      their contributors.
 
-10. NO WARRANTY
-   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-   IMPLIED. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY CLAIM, DAMAGES, OR
-   OTHER LIABILITY ARISING FROM USE OF THE SOFTWARE.
+  (b) Full Attribution will be given to the contributing fork maintainer for
+      all incorporated features or changes. Credit must appear at the point of
+      incorporation — not only in a general acknowledgements list.
+
+  (c) Incorporation does not transfer ownership of the contributor's work. The
+      contributor retains authorship credit in perpetuity. No downstream
+      redistribution, relicensing, or modification of the main project may
+      remove, obscure, or reassign credit for incorporated contributions.
+
+  (d) A contributor's name, handle, or identity may not be used to imply
+      endorsement of any Fork, Derivative Work, or release they did not
+      participate in. The existence of a prior contribution does not constitute
+      ongoing endorsement.
+
+  (e) If a contributor requests correction of a misattribution — credit given
+      in error, credit omitted in error, or credit that misrepresents the scope
+      of their contribution — the maintaining party must make a good-faith effort
+      to correct it in a timely manner.
+
+  (f) Contributors may request removal of their name from the project at any
+      time. Upon such a request, their name will be removed from active-facing
+      attribution (README, UI, documentation) while a factual record of the
+      contribution may be retained in commit history or changelogs solely for
+      the purpose of code provenance.
+
+  (g) If a third party demonstrates in good faith that their work was
+      incorporated into the main project without their consent — whether due to
+      a fork maintainer exceeding the scope of their warranty under 3(a) or any
+      other cause — the original author will make a prompt, good-faith effort to
+      remove the disputed work. Acting to remedy such a situation is not an
+      admission of wrongdoing; it is the expected response.
+
+This right of incorporation does not extend to third parties. Only the original
+author (Cassi) holds this right.
+
+───────────────────────────────────────────────
+4. LICENSE PRESERVATION
+───────────────────────────────────────────────
+
+Any Fork or Derivative Work must be Publicly Distributed under this exact
+license, unmodified. You may not sublicense, relicense, or distribute the
+Software or any Fork under different terms. You may not add restrictions beyond
+those stated here, nor remove any existing ones.
+
+This ensures that the conditions of this license — including Attribution,
+naming, and incorporation rights — cannot be stripped by downstream
+redistribution.
+
+The original author (Cassi) reserves the right to publish revised versions of
+this license for future releases of CHEAP Overlay. Revised versions will apply
+only to releases made under them. Existing Forks and releases distributed under
+a prior version of this license are not automatically subject to revised terms.
+
+───────────────────────────────────────────────
+5. NON-COMMERCIAL
+───────────────────────────────────────────────
+
+Commercial Use of this Software, any Fork, or any Derivative Work is prohibited
+without explicit written permission from the original author (Cassi).
+
+Prohibited uses include, but are not limited to:
+
+  - Selling the Software or a modified version of it.
+  - Bundling the Software into a paid product or subscription.
+  - Offering the Software as a component of a paid or commercial service.
+  - Commercial redistribution of the Software or any Fork.
+  - Using the Software as a vehicle to sell another product or service.
+  - Operating a SaaS or hosted platform built on the Software.
+
+The following uses are explicitly permitted, including when they generate income:
+
+  - Live streaming on any platform (Twitch, YouTube, Kick, etc.).
+  - Monetized video content, sponsored streams, or similar content creation.
+  - Educational use, including courses and tutorials.
+  - Charitable or nonprofit use.
+  - Tournament or competitive event use.
+  - Personal, private use.
+
+The key distinction: using the Software as a tool to make content is permitted.
+Making the Software itself the product is not.
+
+───────────────────────────────────────────────
+6. MODIFICATION MARKING
+───────────────────────────────────────────────
+
+Any Fork must include a publicly accessible "What's Changed" section — in the
+repository README or a dedicated document linked from it — describing all
+substantial modifications made relative to CHEAP Overlay. This section must be
+reasonably maintained as the Fork evolves.
+
+A Fork may not represent itself as the original CHEAP Overlay project or imply
+official endorsement by the original author.
+
+───────────────────────────────────────────────
+7. PRIVACY
+───────────────────────────────────────────────
+
+The purpose of this section is transparency about data practices. It is not
+intended to constrain which applications the Software supports.
+
+The original CHEAP Overlay reads process memory from supported rhythm game
+applications solely to detect in-game state (such as star power or overdrive
+activation). It does not collect, store, or transmit any data. All
+communication is local (localhost only).
+
+Any Fork that reads process memory, collects data, or communicates externally
+must include a publicly accessible Privacy Disclosure, maintained in the
+repository README or a dedicated document linked from it, documenting:
+
+  (a) Which processes are inspected, and for what purpose.
+  (b) What data is collected, if any.
+  (c) Whether any data is stored, and where.
+  (d) Whether any data is transmitted, and to whom.
+  (e) Any telemetry, analytics, or remote communications present in the Fork.
+
+This disclosure must be updated as the Fork's behavior changes. It applies
+regardless of which applications the Fork supports — including but not limited
+to YARG, Guitar Hero: World Tour Definitive Edition, Clone Hero, RB3DX, or any
+future supported targets.
+
+───────────────────────────────────────────────
+8. TERMINATION
+───────────────────────────────────────────────
+
+Any violation of this license automatically and immediately terminates your
+rights to use, copy, modify, or distribute the Software. Upon termination, you
+must immediately cease all distribution and remove any publicly distributed
+copies or builds under your control. Private personal copies already in your
+possession are not subject to a destruction requirement, but you may not
+redistribute or build upon them following termination.
+
+The original author (Cassi) reserves the right to reinstate your license at her
+discretion if the violation is corrected.
+
+Also, violating these terms makes you a real meanie and you should feel bad
+about it.
+
+───────────────────────────────────────────────
+9. NO WARRANTY
+───────────────────────────────────────────────
+
+THE SOFTWARE IS PROVIDED "AS IS," WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY CLAIM, DAMAGES, OR
+OTHER LIABILITY ARISING FROM THE USE OF OR INABILITY TO USE THE SOFTWARE.
+
+───────────────────────────────────────────────
+PLAIN ENGLISH SUMMARY (not a substitute for the above)
+───────────────────────────────────────────────
+
+Here's what this license actually means in plain language:
+
+USE IT FREELY. You can use CHEAP Overlay to stream, make videos, run
+tournaments, or just play games. Even if you're monetized. That's the whole
+point — it's a tool, use it like one.
+
+FORK IT, BUT OWN IT. You can modify and share your own version, but you have
+to call it "CHEAPO [Your Name] Edition" and keep this license on it. If you
+change stuff, say what you changed. Don't pretend it's the original.
+
+GIVE CREDIT. If you build on this project, say so. If the original author
+incorporates your contributions, she'll credit you specifically — not just
+throw your name in a list at the bottom.
+
+NO SELLING IT. You can't take this software and sell it, bundle it into a
+paid product, or build a business on top of it without asking first. Use it
+as a streamer tool? Fine. Make it your product? Not without a conversation.
+
+CONTRIBUTORS ARE PROTECTED. If your code or work gets incorporated upstream,
+your credit stays there. You can't be misrepresented, and you can ask to
+have your name removed at any time. Your contribution doesn't mean you
+endorse whatever comes next.
+
+NO CORPORATE EXTRACTION. This was made for the rhythm game community. It
+should stay useful to that community. The license is designed to prevent
+someone from scooping it up and turning it into something you'd have to pay
+for or that harvests your data.
+
+IF YOU VIOLATE IT. Your rights terminate automatically. You have to take down
+anything you've publicly distributed. You don't have to throw your computer
+in a lake, but you can't keep sharing it. Also, you are a real meanie and you
+should feel bad about it.
+
+Basically, don't sell it, don't claim it's your own, and if you contribute, OWN IT!
