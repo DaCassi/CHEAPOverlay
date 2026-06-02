@@ -31,11 +31,9 @@ the big focal point of this program is the sprites. you can set your own sprites
 
 One of the unique features of this program is the sprite switching for activating star power in the games you play. Please see the demoes below for currently supported games.
 
-GHWTDE
-https://youtu.be/-89oPz7QZu8
+[![GHWTDE Demo](https://img.youtube.com/vi/-89oPz7QZu8/0.jpg)](https://youtu.be/-89oPz7QZu8)
 
-YARG
-https://youtu.be/nHFRGLJZVsg
+[![YARG Demo](https://img.youtube.com/vi/nHFRGLJZVsg/0.jpg)](https://youtu.be/nHFRGLJZVsg)
 
 ## Supported inputs
 
