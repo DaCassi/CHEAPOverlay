@@ -485,10 +485,12 @@ class GHService
                 else
                 {
                     // ── XInput guitar / gamepad ──────────────────────────────────
-                    if (state.dwPacketNumber == prevPacket[i]) continue;
-                    prevPacket[i] = state.dwPacketNumber;
-
+                    // Packet number not used — some controllers (e.g. Santroller)
+                    // don't increment it reliably. Use button-state change instead.
                     var gp = state.Gamepad;
+                    if (gp.wButtons == prevBtns[i] && state.dwPacketNumber == prevPacket[i]) continue;
+                    prevPacket[i] = state.dwPacketNumber;
+                    prevBtns[i]   = gp.wButtons;
 
                     // Fret mapping: Green=A, Red=B, Yellow=Y, Blue=X, Orange=LB
                     bool g = (gp.wButtons & XINPUT_BTN_A)  != 0;
@@ -916,7 +918,7 @@ class GHService
     static extern float rnnoise_process_frame(IntPtr st, float[] pcmOut, float[] pcmIn);
 
     const int   RNNOISE_FRAME_SIZE = 480;   // 10 ms at 48 kHz
-    const float MIC_VOICE_PROB     = 0.50f; // voice probability to open mouth (0–1)
+    const float MIC_VOICE_PROB     = 0.80f; // voice probability to open mouth (0–1)
 
     // ── Fallback amplitude gate (used if rnnoise.dll is missing) ─────────────
     const float MIC_THRESHOLD   = 0.01f;
