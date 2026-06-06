@@ -27,12 +27,15 @@ this program does support multiple instruments. in your obs display follow the h
 
 the big focal point of this program is the sprites. you can set your own sprites. if you don't have the service running, you can use the html as a browser file and enter artist mode, this allows you to display all the sprites in the program. This program has over 200 sprites for every combination of frets, keys, and drum combinations you could have. 
 
+### Keys
+[![Keys Demo](https://img.youtube.com/vi/0HMWs88a6cU/0.jpg)](https://youtu.be/0HMWs88a6cU)
+
 ## STARPOWER
 
 One of the unique features of this program is the sprite switching for activating star power in the games you play. Please see the demoes below for currently supported games.
-## GHWTDE
+### GHWTDE
 [![GHWTDE Demo](https://img.youtube.com/vi/-89oPz7QZu8/0.jpg)](https://youtu.be/-89oPz7QZu8)
-## YARG
+### YARG
 [![YARG Demo](https://img.youtube.com/vi/nHFRGLJZVsg/0.jpg)](https://youtu.be/nHFRGLJZVsg)
 
 ## Supported inputs
