@@ -440,7 +440,7 @@ function getFretSpriteName(f, sp) {
   return name;
 }
 
-function getKeySpriteName(f) {
+function getKeySpriteName(f, sp) {
   if (!f.g && !f.r && !f.y && !f.b && !f.o) return 'Keys_Open';
   let name = 'Keys_';
   if (f.g) name += 'G';
@@ -448,6 +448,7 @@ function getKeySpriteName(f) {
   if (f.y) name += 'Y';
   if (f.b) name += 'B';
   if (f.o) name += 'O';
+  if (sp) name += '_sp';
   return name;
 }
 
@@ -563,11 +564,14 @@ function updateDisplay() {
     layerStrum.style.display = 'none';
 
     // Kick layer — independent of pad layer
-    const kickName = state.drumMode === 'gh' ? 'GH_Drums_Kick' : 'RB_Drums_Kick';
+    const kickBase = state.drumMode === 'gh' ? 'GH_Drums_Kick' : 'RB_Drums_Kick';
+    const kickName = state.starPower ? kickBase + '_sp' : kickBase;
     if (state.drums.kick) {
       if (kickName !== state.currentKickSprite) {
         state.currentKickSprite = kickName;
-        layerDrumKick.src = SPRITE_PATH + kickName + '.png';
+        layerDrumKick.src = state.starPower
+          ? SP_PATH + kickName + '.png'
+          : SPRITE_PATH + kickName + '.png';
       }
       layerDrumKick.style.display = 'block';
     } else {
@@ -576,13 +580,16 @@ function updateDisplay() {
     }
 
     // Pad layer — always visible in drum mode (Rest when nothing hit)
-    const drumName = state.drumMode === 'gh'
+    const drumBase = state.drumMode === 'gh'
       ? getGHDrumSpriteName(state.drums)
       : getRBDrumSpriteName(state.drums);
+    const drumName = state.starPower ? drumBase + '_sp' : drumBase;
 
     if (drumName !== state.currentDrumSprite) {
       state.currentDrumSprite = drumName;
-      layerDrum.src = SPRITE_PATH + drumName + '.png';
+      layerDrum.src = state.starPower
+        ? SP_PATH + drumName + '.png'
+        : SPRITE_PATH + drumName + '.png';
       layerDrum.style.display = 'block';
     }
   } else if (isKeys) {
@@ -596,10 +603,13 @@ function updateDisplay() {
       state.currentKickSprite = '';
     }
 
-    const keyName = getKeySpriteName(state.frets);
+    const keyName = getKeySpriteName(state.frets, state.starPower);
     if (keyName !== state.currentHandSprite) {
       state.currentHandSprite = keyName;
-      layerHand.src = SPRITE_PATH + keyName + '.png';
+      const keySrc = keyName.includes('_sp')
+        ? SP_PATH + keyName + '.png'
+        : SPRITE_PATH + keyName + '.png';
+      layerHand.src = keySrc;
     }
   } else {
     // Guitar mode: show hand/strum, hide drum layers
