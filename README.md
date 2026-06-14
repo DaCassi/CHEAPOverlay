@@ -39,9 +39,10 @@ One of the unique features of this program is the sprite switching for activatin
 [![YARG Demo](https://img.youtube.com/vi/nHFRGLJZVsg/0.jpg)](https://youtu.be/nHFRGLJZVsg)
 ### RB3DX
 [![RB3DX Demo](https://img.youtube.com/vi/3w0f5cJsiHc/0.jpg)](https://youtu.be/nHFRGLJZVsg)
+### Clone Hero
+[![Clone Hero Demo](https://img.youtube.com/vi/Y7gYnko9FvQ/0.jpg)](https://youtu.be/Y7gYnko9FvQ)
 
 ## Supported inputs
-
 - XInput (most modern controllers)
 - HID (older guitars, weird adapters)
 - MIDI (keyboards, drum pads)
@@ -51,8 +52,6 @@ One of the unique features of this program is the sprite switching for activatin
 ## what's not supported
 
 EVERY GAMEINPUT DEVICE. BASTARD API. HEADACHE PRODUCER
-
-Clone Hero. Also just difficult to read from, may revisit.
 
 ## Acknowledgements
 
