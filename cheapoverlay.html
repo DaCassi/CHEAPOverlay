@@ -4,10 +4,30 @@
 <meta charset="UTF-8">
 <title>CHEAPOverlay</title>
 <style>
+  /* ===================================================================
+     HIT-COUNTER COLOR DEFAULTS. To recolor, edit config.ini [Counters]
+     (one hex per lane — the service pushes them over the WS and the idle
+     border + background tint are derived automatically). These :root values
+     are just the fallback before the service connects.
+     =================================================================== */
+  :root {
+    --trk-box-bg:    rgba(0,0,0,0.55);  /* box background */
+    --trk-idle-text: #777;              /* label when unlit */
+    --trk-count:     #fff;              /* the hit-count number */
+
+    --trk-g-idle: #3a3;     --trk-g: #0f0;     --trk-g-bg: #1a4a1a;     /* green  */
+    --trk-r-idle: #a33;     --trk-r: #f44;     --trk-r-bg: #4a1a1a;     /* red    */
+    --trk-y-idle: #aa3;     --trk-y: #ff0;     --trk-y-bg: #4a4a1a;     /* yellow */
+    --trk-b-idle: #33a;     --trk-b: #44f;     --trk-b-bg: #1a1a4a;     /* blue   */
+    --trk-o-idle: #a63;     --trk-o: #fa0;     --trk-o-bg: #4a2a1a;     /* orange */
+    --trk-strum-idle: #888; --trk-strum: #fff; --trk-strum-bg: #2a2a2a; /* strum  */
+    --trk-kick-idle: #a3a;  --trk-kick: #f4f;  --trk-kick-bg: #4a1a4a;  /* kick   */
+  }
+
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { background: transparent; overflow: hidden; font-family: monospace; }
 
-  #overlay-root { position: relative; display: none; }
+  #overlay-root { position: relative; display: none; margin: 0 auto; }
 
   .layer {
     position: absolute; top: 0; left: 0;
@@ -22,6 +42,42 @@
     line-height: 1.6; pointer-events: none;
     display: none;
   }
+
+  /* ── Input hit-counter tracker — strip 20px below the sprite ── */
+  #input-tracker {
+    display: none;
+    width: fit-content;
+    margin: 20px auto 0;
+    gap: 6px;
+    align-items: flex-end;
+    font-family: monospace;
+    pointer-events: auto;
+    cursor: pointer;
+  }
+  #input-tracker.show { display: flex; }
+  .trk-box {
+    width: 34px; min-height: 42px;
+    border: 2px solid #444; border-radius: 5px;
+    background: var(--trk-box-bg);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 3px; padding: 4px 2px;
+    color: var(--trk-idle-text); transition: all 0.08s;
+  }
+  .trk-box.cym  { border-radius: 50%; width: 42px; height: 42px; }
+  .trk-box.kick { width: 52px; }
+  .trk-label { font-size: 11px; font-weight: bold; line-height: 1; }
+  .trk-count { font-size: 14px; color: var(--trk-count); line-height: 1; }
+  .trk-box.g { border-color: var(--trk-g-idle); } .trk-box.g.active { background: var(--trk-g-bg); border-color: var(--trk-g); color: var(--trk-g); }
+  .trk-box.r { border-color: var(--trk-r-idle); } .trk-box.r.active { background: var(--trk-r-bg); border-color: var(--trk-r); color: var(--trk-r); }
+  .trk-box.y { border-color: var(--trk-y-idle); } .trk-box.y.active { background: var(--trk-y-bg); border-color: var(--trk-y); color: var(--trk-y); }
+  .trk-box.b { border-color: var(--trk-b-idle); } .trk-box.b.active { background: var(--trk-b-bg); border-color: var(--trk-b); color: var(--trk-b); }
+  .trk-box.o { border-color: var(--trk-o-idle); } .trk-box.o.active { background: var(--trk-o-bg); border-color: var(--trk-o); color: var(--trk-o); }
+  .trk-box.strum { border-color: var(--trk-strum-idle); } .trk-box.strum.active { background: var(--trk-strum-bg); border-color: var(--trk-strum); color: var(--trk-strum); }
+  .trk-box.kick  { border-color: var(--trk-kick-idle); } .trk-box.kick.active  { background: var(--trk-kick-bg); border-color: var(--trk-kick); color: var(--trk-kick); }
+  /* Drum reset gesture cues: boxes hit in order, and "armed" once the sequence completes */
+  .trk-box.seq-done { box-shadow: inset 0 0 0 2px rgba(255,255,255,0.55); }
+  #input-tracker.armed { filter: drop-shadow(0 0 5px #fff); }
 
   /* ── PS2 calibration overlay (UNTESTED) ── */
   #calibrate-overlay {
@@ -129,6 +185,20 @@
   .layer-toggle.on  { border-color: #0f0; color: #0f0; }
   .layer-toggle.off { border-color: #555; color: #555; }
 
+  /* Sliding toggle switch (Artist Mode RB Mode) */
+  .switch { position: relative; width: 44px; height: 22px; flex-shrink: 0; cursor: pointer; }
+  .switch input { display: none; }
+  .switch .slider {
+    position: absolute; inset: 0; background: #333;
+    border: 1px solid #555; border-radius: 22px; transition: all 0.15s;
+  }
+  .switch .slider::before {
+    content: ''; position: absolute; width: 16px; height: 16px;
+    left: 2px; top: 2px; background: #888; border-radius: 50%; transition: all 0.15s;
+  }
+  .switch input:checked + .slider { background: #1a4a1a; border-color: #0f0; }
+  .switch input:checked + .slider::before { transform: translateX(22px); background: #0f0; }
+
   .nav-btns { display: flex; gap: 8px; }
   .nav-btn {
     padding: 6px 16px; border-radius: 4px;
@@ -208,6 +278,14 @@
 
   <div id="artist-controls">
     <div>
+      <h3>RB Mode</h3>
+      <div class="layer-row">
+        <span class="layer-label">Alt sprites</span>
+        <span style="flex:1;font-size:11px;color:#555;">preview the ALT Rock Band guitar sprites</span>
+        <label class="switch"><input type="checkbox" id="rbmode-switch" onchange="toggleRbMode()"><span class="slider"></span></label>
+      </div>
+    </div>
+    <div>
       <h3>Layer Visibility</h3>
       <div style="display:flex;flex-direction:column;gap:6px;">
         <div class="layer-row">
@@ -282,6 +360,8 @@
   </div>
 </div>
 
+<div id="input-tracker"></div>
+
 <script>
 const WS_URL       = 'ws://localhost:2828';
 const RECONNECT_MS = 2000;
@@ -310,6 +390,7 @@ const XINPUT_MAP = {
   strumDownValue:  0.14286,
   strumOpenDeadzone: 1.0,
   strumTolerance:  0.05,
+  select:          8,   // Back/View button — all 5 frets + select resets hit counters
 };
 
 // =============================================================================
@@ -392,6 +473,8 @@ const state = {
   currentKickSprite: '',
   currentBaseName: '',
   starPower: false,          // true while GHWTDE star power is active
+  select: false,             // Back/Select button — drives the hit-counter reset combo
+  rbMode: false,             // config.ini "RB mode" — swaps guitar frets/solo/base for ALT sprites
 };
 
 // =============================================================================
@@ -414,16 +497,7 @@ const dbgStrum     = document.getElementById('dbg-strum');
 const dbgAxis      = document.getElementById('dbg-axis');
 const dbgSP        = document.getElementById('dbg-sp');
 
-layerBody.addEventListener('load', () => {
-  const w = layerBody.naturalWidth;
-  const h = layerBody.naturalHeight;
-  if (w && h) {
-    overlayRoot.style.width  = w + 'px';
-    overlayRoot.style.height = h + 'px';
-    document.body.style.width  = w + 'px';
-    document.body.style.height = h + 'px';
-  }
-});
+layerBody.addEventListener('load', relayout);
 
 // =============================================================================
 // SPRITE NAME
@@ -523,8 +597,80 @@ function getRBDrumSpriteName(d) {
 }
 
 // =============================================================================
+// DRUM HIT MERGING
+// =============================================================================
+// Pads hit within DRUM_MERGE_MS of each other show as one merged sprite; hits
+// further apart show separately (the newer hit wins). The sprite otherwise
+// follows the raw pad state for how long it stays up and when it clears.
+const DRUM_MERGE_MS = 50;
+const DRUM_PADS = ['r', 'y', 'b', 'g', 'o', 'yCym', 'bCym', 'gCym'];
+let drumRawPrev = {};      // last raw pad state — for rising-edge detection
+let drumHitTime = {};      // p -> timestamp of its most recent hit
+let drumLastHit = 0;       // timestamp of the most recent hit on any pad
+
+// Returns the held pads belonging to the latest merge group: a held pad shows
+// only if its hit landed within DRUM_MERGE_MS of the newest hit.
+function computeDrumChord(now) {
+  for (const p of DRUM_PADS) {
+    const cur = !!state.drums[p];
+    if (cur && !drumRawPrev[p]) { drumHitTime[p] = now; drumLastHit = now; }
+    drumRawPrev[p] = cur;
+  }
+  const chord = {};
+  for (const p of DRUM_PADS) {
+    if (state.drums[p] && drumLastHit - (drumHitTime[p] ?? -1e9) <= DRUM_MERGE_MS) chord[p] = true;
+  }
+  return chord;
+}
+
+// Renders the kick + pad layers. Kick follows the raw state; the pad sprite uses
+// the merge-grouped chord.
+function renderDrumLayers(now) {
+  const chord = computeDrumChord(now);
+
+  const kickBase = state.drumMode === 'gh' ? 'GH_Drums_Kick' : 'RB_Drums_Kick';
+  const kickName = state.starPower ? kickBase + '_sp' : kickBase;
+  if (state.drums.kick) {
+    if (kickName !== state.currentKickSprite) {
+      state.currentKickSprite = kickName;
+      layerDrumKick.src = state.starPower ? SP_PATH + kickName + '.png' : SPRITE_PATH + kickName + '.png';
+    }
+    layerDrumKick.style.display = 'block';
+  } else {
+    layerDrumKick.style.display = 'none';
+    state.currentKickSprite = '';
+  }
+
+  const drumBase = state.drumMode === 'gh' ? getGHDrumSpriteName(chord) : getRBDrumSpriteName(chord);
+  const drumName = state.starPower ? drumBase + '_sp' : drumBase;
+  if (drumName !== state.currentDrumSprite) {
+    state.currentDrumSprite = drumName;
+    layerDrum.src = state.starPower ? SP_PATH + drumName + '.png' : SPRITE_PATH + drumName + '.png';
+    layerDrum.style.display = 'block';
+  }
+}
+
+// =============================================================================
 // UPDATE DISPLAY
 // =============================================================================
+// RB mode swaps the guitar 5-fret, solo, and Guitar_base sprites for ALT-prefixed
+// versions (e.g. fret_G -> ALTfret_G). Keys and drums are unaffected.
+// Driven by config.ini (state.rbMode) live; in Artist Mode the toggle switch
+// (artistRbOverride) takes over so it isn't clobbered by incoming WS state.
+let artistRbOverride = null;  // null = follow config; true/false = Artist Mode toggle
+function rbModeActive() {
+  const artistOpen = document.getElementById('artist').style.display === 'flex';
+  if (artistOpen && artistRbOverride !== null) return artistRbOverride;
+  return state.rbMode;
+}
+
+function altName(name) {
+  if (!rbModeActive()) return name;
+  if (name.startsWith('fret_') || name.startsWith('solo_fret_') || name === 'Guitar_base')
+    return 'ALT' + name;
+  return name;
+}
+
 function updateBaseSprite() {
   let baseName;
   if (state.drumMode)                       baseName = 'Drums_Base';
@@ -532,7 +678,7 @@ function updateBaseSprite() {
   else                                      baseName = 'Guitar_base';
   if (baseName !== state.currentBaseName) {
     state.currentBaseName = baseName;
-    layerBody.src = SPRITE_PATH + baseName + '.png';
+    layerBody.src = SPRITE_PATH + altName(baseName) + '.png';
   }
 }
 
@@ -540,6 +686,7 @@ function showOverlay(guitarName, source) {
   if (document.getElementById('artist').style.display === 'flex') return;
   statusEl.style.display    = 'none';
   overlayRoot.style.display = 'block';
+  setTrackerVisible(true);
   dbgGuitar.textContent  = guitarName || '-';
   dbgSource.textContent  = source;
 }
@@ -550,6 +697,7 @@ function hideOverlay(msg, detail) {
   statusDetail.textContent = detail;
   statusEl.style.display   = 'flex';
   overlayRoot.style.display = 'none';
+  setTrackerVisible(false);
 }
 
 function updateDisplay() {
@@ -559,39 +707,10 @@ function updateDisplay() {
   updateBaseSprite();
 
   if (isDrum) {
-    // Drum mode: hide hand/strum layers, show drum sprite + mouth
+    // Drum mode: hide hand/strum layers; kick + pad layers driven by the merge/hold logic
     layerHand.style.display  = 'none';
     layerStrum.style.display = 'none';
-
-    // Kick layer — independent of pad layer
-    const kickBase = state.drumMode === 'gh' ? 'GH_Drums_Kick' : 'RB_Drums_Kick';
-    const kickName = state.starPower ? kickBase + '_sp' : kickBase;
-    if (state.drums.kick) {
-      if (kickName !== state.currentKickSprite) {
-        state.currentKickSprite = kickName;
-        layerDrumKick.src = state.starPower
-          ? SP_PATH + kickName + '.png'
-          : SPRITE_PATH + kickName + '.png';
-      }
-      layerDrumKick.style.display = 'block';
-    } else {
-      layerDrumKick.style.display = 'none';
-      state.currentKickSprite = '';
-    }
-
-    // Pad layer — always visible in drum mode (Rest when nothing hit)
-    const drumBase = state.drumMode === 'gh'
-      ? getGHDrumSpriteName(state.drums)
-      : getRBDrumSpriteName(state.drums);
-    const drumName = state.starPower ? drumBase + '_sp' : drumBase;
-
-    if (drumName !== state.currentDrumSprite) {
-      state.currentDrumSprite = drumName;
-      layerDrum.src = state.starPower
-        ? SP_PATH + drumName + '.png'
-        : SPRITE_PATH + drumName + '.png';
-      layerDrum.style.display = 'block';
-    }
+    renderDrumLayers(performance.now());
   } else if (isKeys) {
     // Keys mode: hand layer shows Keys_* sprite, strum hidden
     layerHand.style.display  = 'block';
@@ -628,9 +747,10 @@ function updateDisplay() {
     if (handName !== state.currentHandSprite) {
       state.currentHandSprite = handName;
       // SP sprites live in root sprites/ regardless of player sub-path
-      const spriteSrc = handName.includes('_sp')
-        ? SP_PATH + handName + '.png'
-        : SPRITE_PATH + handName + '.png';
+      const altHand = altName(handName);
+      const spriteSrc = altHand.includes('_sp')
+        ? SP_PATH + altHand + '.png'
+        : SPRITE_PATH + altHand + '.png';
       layerHand.src = spriteSrc;
     }
     if (state.strum !== state.currentStrum) {
@@ -645,6 +765,220 @@ function updateDisplay() {
   dbgStrum.textContent = state.strum;
   dbgSP.textContent    = state.starPower ? '★ ACTIVE' : 'off';
   dbgSP.style.color    = state.starPower ? '#ff0' : '#555';
+
+  updateHitTracker();
+}
+
+// =============================================================================
+// INPUT HIT TRACKER
+// Counts rising-edge hits per input and shows them in a strip below the sprite.
+// Layout switches with the instrument: guitar (frets + strum), keys (frets),
+// GH drums (5 pads + kick), RB pro drums (4 toms + 3 cymbals + kick).
+// =============================================================================
+const trackerEl = document.getElementById('input-tracker');
+
+const TRACKER_LAYOUTS = {
+  guitar: [
+    { id:'g',  label:'G', cls:'g', get:() => state.frets.g },
+    { id:'r',  label:'R', cls:'r', get:() => state.frets.r },
+    { id:'y',  label:'Y', cls:'y', get:() => state.frets.y },
+    { id:'b',  label:'B', cls:'b', get:() => state.frets.b },
+    { id:'o',  label:'O', cls:'o', get:() => state.frets.o },
+    { id:'su', label:'↑', cls:'strum', get:() => state.strum === 'up' },
+    { id:'sd', label:'↓', cls:'strum', get:() => state.strum === 'down' },
+  ],
+  keys: [
+    { id:'g', label:'G', cls:'g', get:() => state.frets.g },
+    { id:'r', label:'R', cls:'r', get:() => state.frets.r },
+    { id:'y', label:'Y', cls:'y', get:() => state.frets.y },
+    { id:'b', label:'B', cls:'b', get:() => state.frets.b },
+    { id:'o', label:'O', cls:'o', get:() => state.frets.o },
+  ],
+  gh: [
+    { id:'kick', label:'KICK', cls:'kick', get:() => state.drums.kick },
+    { id:'g', label:'G', cls:'g', get:() => state.drums.g },
+    { id:'r', label:'R', cls:'r', get:() => state.drums.r },
+    { id:'y', label:'Y', cls:'y', get:() => state.drums.y },
+    { id:'b', label:'B', cls:'b', get:() => state.drums.b },
+    { id:'o', label:'O', cls:'o', get:() => state.drums.o },
+  ],
+  rb: [
+    { id:'kick', label:'KICK', cls:'kick', get:() => state.drums.kick },
+    { id:'r',    label:'R', cls:'r', get:() => state.drums.r },
+    { id:'y',    label:'Y', cls:'y', get:() => state.drums.y },
+    { id:'b',    label:'B', cls:'b', get:() => state.drums.b },
+    { id:'g',    label:'G', cls:'g', get:() => state.drums.g },
+    // Cymbals are optional in the reset sequence — RB1 / cymbal-less RB2+ kits don't have them
+    { id:'yCym', label:'Y', cls:'y cym', seq:false, get:() => state.drums.yCym },
+    { id:'bCym', label:'B', cls:'b cym', seq:false, get:() => state.drums.bCym },
+    { id:'gCym', label:'G', cls:'g cym', seq:false, get:() => state.drums.gCym },
+  ],
+};
+
+let trackerKey  = null;   // layout currently built into the strip
+let trackerSpec = [];     // active layout array
+let hitCounts   = {};     // id -> count
+let hitPrevHeld = {};     // id -> was held last frame
+let trackerBoxes = {};    // id -> { box, count } element refs
+
+// Drum reset gesture: hit every input left-to-right in tracker order, then Select.
+let drumSeqProgress = 0;        // how many boxes hit in order so far
+let drumSeqArmed    = false;    // full sequence done — Select now resets
+let drumSeqLastTs   = 0;        // timestamp of last in-order hit
+const DRUM_SEQ_TIMEOUT = 4000;  // ms allowed between steps and before pressing Select
+
+function isDrumLayout() { return trackerKey === 'gh' || trackerKey === 'rb'; }
+
+function currentTrackerKey() {
+  if (state.drumMode === 'gh') return 'gh';
+  if (state.drumMode === 'rb') return 'rb';
+  if (state.instrumentType === 'keys') return 'keys';
+  return 'guitar';
+}
+
+// Rebuild the strip for a new instrument layout. Counts reset per instrument.
+function buildTracker(key) {
+  trackerKey   = key;
+  trackerSpec  = TRACKER_LAYOUTS[key] || TRACKER_LAYOUTS.guitar;
+  hitCounts    = {};
+  hitPrevHeld  = {};
+  trackerBoxes = {};
+  trackerEl.innerHTML = '';
+  trackerSpec.forEach(inp => {
+    hitCounts[inp.id]   = 0;
+    hitPrevHeld[inp.id] = inp.get();   // seed so an input held at switch-time doesn't count
+    const box = document.createElement('div');
+    box.className = 'trk-box ' + inp.cls;
+    const label = document.createElement('span');
+    label.className = 'trk-label';
+    label.textContent = inp.label;
+    const count = document.createElement('span');
+    count.className = 'trk-count';
+    count.textContent = '0';
+    box.append(label, count);
+    trackerEl.appendChild(box);
+    trackerBoxes[inp.id] = { box, count };
+  });
+  drumSeqProgress = 0; drumSeqArmed = false; drumSeqLastTs = 0;
+  trackerEl.classList.remove('armed');
+  relayout();
+}
+
+function updateHitTracker() {
+  const key = currentTrackerKey();
+  if (key !== trackerKey) buildTracker(key);
+  trackerSpec.forEach(inp => {
+    const held = inp.get();
+    const refs = trackerBoxes[inp.id];
+    if (held && !hitPrevHeld[inp.id]) {
+      hitCounts[inp.id]++;
+      refs.count.textContent = hitCounts[inp.id];
+      if (isDrumLayout()) advanceDrumSeq(inp.id);
+    }
+    hitPrevHeld[inp.id] = held;
+    refs.box.classList.toggle('active', held);
+  });
+}
+
+// =============================================================================
+// COUNTER COLORS (defaults below; config.ini overrides them via the WS)
+// =============================================================================
+// Each lane has ONE hex colour; the unlit border and background tint are derived
+// from it, so changing one value recolours the whole counter consistently.
+const DEFAULT_LANE_COLORS = {
+  g: '#00ff00', r: '#ff4444', y: '#ffff00', b: '#4444ff',
+  o: '#ffaa00', strum: '#ffffff', kick: '#ff44ff',
+};
+function _isHex(c) { return typeof c === 'string' && /^#?[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$/.test(c.trim()); }
+function _rgb(c) { c = c.replace('#', '').trim(); if (c.length === 3) c = c.split('').map(x => x + x).join(''); return [0, 2, 4].map(i => parseInt(c.slice(i, i + 2), 16)); }
+function _mix(a, b, t) { const A = _rgb(a), B = _rgb(b); return '#' + A.map((v, i) => Math.round(v + (B[i] - v) * t).toString(16).padStart(2, '0')).join(''); }
+
+function applyCounterColors(colors) {
+  colors = colors || {};
+  const root = document.documentElement.style;
+  for (const lane of Object.keys(DEFAULT_LANE_COLORS)) {
+    const main = colors[lane];
+    if (!_isHex(main)) continue;  // not set / invalid -> keep the CSS default
+    root.setProperty('--trk-' + lane, main);
+    root.setProperty('--trk-' + lane + '-idle', _mix(main, '#444444', 0.5));   // dimmer unlit border
+    root.setProperty('--trk-' + lane + '-bg',   _mix(main, '#111111', 0.80));  // dark background tint
+  }
+  if (_isHex(colors.count)) root.setProperty('--trk-count', colors.count);
+}
+
+function setTrackerVisible(show) {
+  if (trackerEl.classList.contains('show') === show) return;
+  trackerEl.classList.toggle('show', show);
+  relayout();
+}
+
+// Zero every count for the current instrument and refresh the strip.
+function resetHitCounts() {
+  trackerSpec.forEach(inp => {
+    hitCounts[inp.id] = 0;
+    if (trackerBoxes[inp.id]) trackerBoxes[inp.id].count.textContent = '0';
+  });
+}
+
+// Clear any in-progress drum reset sequence and its visual cues.
+function resetDrumSeq() {
+  drumSeqProgress = 0;
+  drumSeqArmed = false;
+  trackerEl.classList.remove('armed');
+  trackerSpec.forEach(inp => trackerBoxes[inp.id] && trackerBoxes[inp.id].box.classList.remove('seq-done'));
+}
+
+// Advance the left-to-right reset sequence on a drum hit. A wrong/late hit
+// restarts it (a hit on the first box counts as a fresh step 1).
+function advanceDrumSeq(id) {
+  const order = trackerSpec.filter(s => s.seq !== false).map(s => s.id);
+  if (!order.includes(id)) return;  // optional inputs (cymbals) don't advance or break the sequence
+  const now = performance.now();
+  if (now - drumSeqLastTs > DRUM_SEQ_TIMEOUT) resetDrumSeq();
+  drumSeqLastTs = now;
+  if (id === order[drumSeqProgress]) {
+    trackerBoxes[id].box.classList.add('seq-done');
+    drumSeqProgress++;
+    if (drumSeqProgress === order.length) { drumSeqArmed = true; trackerEl.classList.add('armed'); }
+  } else {
+    resetDrumSeq();
+    if (id === order[0]) { drumSeqProgress = 1; trackerBoxes[id].box.classList.add('seq-done'); }
+  }
+}
+
+// Reset gesture. Guitar/keys: hold all five frets + Select. Drums: complete the
+// left-to-right sequence + Select. Fires once per Select press (latched).
+let resetComboPrev = false;
+function checkResetCombo(allFrets, select) {
+  let armed;
+  if (isDrumLayout()) {
+    if (performance.now() - drumSeqLastTs > DRUM_SEQ_TIMEOUT) resetDrumSeq(); // expired
+    armed = drumSeqArmed;
+  } else {
+    armed = allFrets;
+  }
+  const combo = armed && select;
+  if (combo && !resetComboPrev) {
+    resetHitCounts();
+    resetDrumSeq();
+  }
+  resetComboPrev = combo;
+}
+
+// Double-click the strip also resets the current instrument's counts.
+trackerEl.addEventListener('dblclick', resetHitCounts);
+
+// Size the page to fit the sprite plus the tracker strip 20px below it.
+function relayout() {
+  const w = layerBody.naturalWidth, h = layerBody.naturalHeight;
+  if (!w || !h) return;
+  overlayRoot.style.width  = w + 'px';
+  overlayRoot.style.height = h + 'px';
+  const showing = trackerEl.classList.contains('show');
+  const tw = showing ? trackerEl.offsetWidth  : 0;
+  const th = showing ? trackerEl.offsetHeight : 0;
+  document.body.style.width  = Math.max(w, tw) + 'px';
+  document.body.style.height = (th ? h + 20 + th : h) + 'px';
 }
 
 function applyState(frets, strum) {
@@ -664,6 +998,13 @@ function handleCalibration(data) {
   const overlay = document.getElementById('calibrate-overlay');
   if (!data.calibrating) {
     overlay.style.display = 'none';
+    // The poll loop starts streaming GuitarState now, but the tracker strip was
+    // last built/laid out while the calibration screen covered the page, so it
+    // stays stale until reloaded. Force a clean rebuild + relayout so input
+    // shows immediately instead of needing a manual refresh.
+    trackerKey = null;
+    setTrackerVisible(true);
+    updateDisplay();
     return;
   }
   overlay.style.display = 'flex';
@@ -693,6 +1034,9 @@ function connectWS() {
       // PS2 calibration messages — handled before player-slot filtering (UNTESTED)
       if (typeof data.calibrating !== 'undefined') { handleCalibration(data); return; }
 
+      // Counter colours from config.ini — sent once on connect
+      if (data.type === 'colors') { applyCounterColors(data.colors); return; }
+
       // Multiplayer: ignore messages not intended for this player slot
       if (typeof data.player !== 'undefined' && data.player !== PLAYER_INDEX) return;
 
@@ -720,6 +1064,8 @@ function connectWS() {
 
       state.soloFrets  = { g: !!data.soloG, r: !!data.soloR, y: !!data.soloY, b: !!data.soloB, o: !!data.soloO };
       state.starPower  = !!data.starPower;
+      state.select     = !!data.select;
+      state.rbMode     = !!data.rbMode;
       state.drumMode   = data.drumMode || '';
       state.drums     = {
         kick: !!data.kick,
@@ -736,6 +1082,8 @@ function connectWS() {
         { g: !!data.g, r: !!data.r, y: !!data.y, b: !!data.b, o: !!data.o },
         data.strum || 'neutral'
       );
+      const fr = state.frets;
+      checkResetCombo(fr.g && fr.r && fr.y && fr.b && fr.o, state.select);
       layerMouth.src = SPRITE_PATH + (data.mouthOpen ? 'mouth_open' : 'mouth_closed') + '.png';
     } catch(e) { console.error('WS parse error:', e); }
   });
@@ -797,6 +1145,12 @@ function pollGamepad() {
     b: btns[XINPUT_MAP.blue]?.pressed   ?? false,
     o: btns[XINPUT_MAP.orange]?.pressed ?? false,
   };
+
+  // Reset gesture — checked every poll so Select can be pressed while frets are held
+  checkResetCombo(
+    newFrets.g && newFrets.r && newFrets.y && newFrets.b && newFrets.o,
+    btns[XINPUT_MAP.select]?.pressed ?? false
+  );
 
   // Strum axis
   const v = axes[XINPUT_MAP.strumAxis] ?? 0;
@@ -874,11 +1228,16 @@ function openArtistMode() {
     preview.style.height = h + 'px';
     document.getElementById('artist-size').textContent = `${w} × ${h}`;
   };
-  bodyImg.src = SPRITE_PATH + 'Guitar_base.png';
+  bodyImg.src = SPRITE_PATH + altName('Guitar_base') + '.png';
+
+  // Seed the RB Mode toggle from the live config value so the preview matches the stream
+  artistRbOverride = state.rbMode;
+  document.getElementById('rbmode-switch').checked = state.rbMode;
 
   document.getElementById('artist').style.display = 'flex';
   statusEl.style.display    = 'none';
   overlayRoot.style.display = 'none';
+  setTrackerVisible(false);
   artistSetMode('guitar');
 }
 
@@ -956,10 +1315,18 @@ function rebuildSpriteGrid() {
   });
 }
 
+// Artist Mode RB Mode toggle — re-render the preview with/without ALT sprites.
+function toggleRbMode() {
+  artistRbOverride = document.getElementById('rbmode-switch').checked;
+  artistRender();
+}
+
 function closeArtistMode() {
+  artistRbOverride = null;  // stop overriding; live overlay follows config again
   document.getElementById('artist').style.display = 'none';
   if (INPUT.activeSource) {
     overlayRoot.style.display = 'block';
+    setTrackerVisible(true);
   } else {
     statusEl.style.display = 'flex';
   }
@@ -1019,7 +1386,7 @@ function artistRender() {
   apBody.style.display = artistLayerVisible.body ? 'block' : 'none';
   if (isDrum)      apBody.src = SPRITE_PATH + 'Drums_Base.png';
   else if (isKeys) apBody.src = SPRITE_PATH + 'Keys_Base.png';
-  else             apBody.src = SPRITE_PATH + 'Guitar_base.png';
+  else             apBody.src = SPRITE_PATH + altName('Guitar_base') + '.png';
   // Sync the dropdown so it reflects the auto-chosen base
   document.getElementById('sel-body').value = apBody.src.includes('Drums') ? 'sprites/Drums_Base.png'
     : apBody.src.includes('Keys') ? 'sprites/Keys_Base.png' : 'sprites/Guitar_base.png';
@@ -1047,7 +1414,7 @@ function artistRender() {
     // Guitar sprite — show hand/strum, hide drum layer
     apDrum.style.display = 'none';
     apHand.style.display = artistLayerVisible.hand ? 'block' : 'none';
-    apHand.src = SPRITE_PATH + name + '.png';
+    apHand.src = SPRITE_PATH + altName(name) + '.png';
 
     const strumVal = document.getElementById('sel-strum').value;
     if (!artistLayerVisible.strum) {
