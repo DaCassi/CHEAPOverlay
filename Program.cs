@@ -36,6 +36,10 @@ class GHService
         Console.WriteLine("[CHEAPO] Starting on ws://localhost:2828");
         Console.WriteLine("[CHEAPO] Reading XInput + HID instruments");
         Console.WriteLine("[CHEAPO] Keep this window open while using the overlay.");
+
+        // Apply config.ini (RB mode per player) before any client connects
+        LoadConfig();
+
         // Start WebSocket server
         var wsTask = RunWebSocketServer();
 
@@ -48,9 +52,174 @@ class GHService
         var ghwtdeTask  = Task.Run(PollGHWTDE);
         var rb3dxTask   = Task.Run(PollRB3DX);
         var yargTask    = Task.Run(PollYARG);
+        var cloneTask   = Task.Run(PollCloneHero);
+        var fortniteTask = Task.Run(PollFortnite);
         var ps2Task     = Task.Run(PollPS2);
+        var encoreTask  = Task.Run(PollEncore);
+        var encoreBridgeTask = Task.Run(PollEncoreBridge);
 
-        await Task.WhenAll(wsTask, xinputTask, hidTask, soloTask, micTask, midiTask, ghwtdeTask, rb3dxTask, yargTask, ps2Task);
+        await Task.WhenAll(wsTask, xinputTask, hidTask, soloTask, micTask, midiTask, ghwtdeTask, rb3dxTask, yargTask, cloneTask, fortniteTask, ps2Task, encoreTask, encoreBridgeTask);
+    }
+
+    // =========================================================================
+    // CONFIG (config.ini in the install root — the parent of the service/ folder,
+    // alongside cheapoverlay.html and sprites/)
+    // =========================================================================
+    static string ConfigPath()
+    {
+        // AppContext.BaseDirectory is the service/ folder the exe lives in; the
+        // install root (where the overlay + sprites live) is its parent.
+        string baseDir = AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        string root = Path.GetDirectoryName(baseDir) ?? baseDir;
+        return Path.Combine(root, "config.ini");
+    }
+    // Hit-counter colours pushed to the overlay (lane key -> #hex). Empty = overlay defaults.
+    static readonly Dictionary<string, string> CounterColors = new();
+    // config.ini key -> overlay lane key
+    static readonly Dictionary<string, string> ColorKeyMap = new(StringComparer.OrdinalIgnoreCase) {
+        { "green", "g" }, { "red", "r" }, { "yellow", "y" }, { "blue", "b" },
+        { "orange", "o" }, { "strum", "strum" }, { "kick", "kick" }, { "count", "count" },
+    };
+
+    static string DefaultConfigText() => string.Join("\r\n", new[] {
+        "# CHEAPOverlay configuration",
+        "#",
+        "# RB Mode: players listed here use the alternate Rock Band 5-fret + solo",
+        "# sprites (the ALT-prefixed sprites in your sprites folder). Comma-separated",
+        "# player numbers 1-4, e.g.  rbModePlayers = 1,3",
+        "# Leave blank to disable RB mode for everyone.",
+        "",
+        "[RBMode]",
+        "rbModePlayers =",
+    }) + DefaultCountersText();
+
+    static string DefaultCountersText() => string.Join("\r\n", new[] {
+        "",
+        "",
+        "# Hit-counter colours (hex). One colour per lane; the unlit border and the",
+        "# background tint are derived from it automatically. 'count' is the number colour.",
+        "[Counters]",
+        "green  = #00ff00",
+        "red    = #ff4444",
+        "yellow = #ffff00",
+        "blue   = #4444ff",
+        "orange = #ffaa00",
+        "strum  = #ffffff",
+        "kick   = #ff44ff",
+        "count  = #ffffff",
+        "",
+    });
+
+    static bool IsHexColor(string s)
+    {
+        s = s.Trim().TrimStart('#');
+        return (s.Length == 3 || s.Length == 6) && s.All(Uri.IsHexDigit);
+    }
+
+    static void LoadConfig()
+    {
+        try
+        {
+            string path = ConfigPath();
+            bool existed = File.Exists(path);
+            if (!existed)
+            {
+                File.WriteAllText(path, DefaultConfigText());
+                Console.WriteLine($"[Config] Created default config.ini at {path}");
+            }
+
+            string rbVal = "";
+            string section = "";
+            bool hasCounters = false;
+            CounterColors.Clear();
+            foreach (var raw in File.ReadAllLines(path))
+            {
+                var line = raw.Trim();
+                if (line.Length == 0 || line.StartsWith("#") || line.StartsWith(";")) continue;
+                if (line.StartsWith("[") && line.EndsWith("]"))
+                {
+                    section = line.Substring(1, line.Length - 2).Trim().ToLowerInvariant();
+                    if (section == "counters") hasCounters = true;
+                    continue;
+                }
+                int eq = line.IndexOf('=');
+                if (eq < 0) continue;
+                var key = line.Substring(0, eq).Trim();
+                var val = line.Substring(eq + 1).Trim();
+
+                if (section == "rbmode" && key.Equals("rbModePlayers", StringComparison.OrdinalIgnoreCase))
+                    rbVal = val;
+                else if (section == "counters" && ColorKeyMap.TryGetValue(key, out var lane) && IsHexColor(val))
+                    CounterColors[lane] = val.StartsWith("#") ? val : "#" + val;
+            }
+
+            // Add the [Counters] section to pre-existing configs that don't have it yet
+            if (existed && !hasCounters)
+            {
+                File.AppendAllText(path, DefaultCountersText());
+                Console.WriteLine("[Config] Added [Counters] section to config.ini");
+            }
+
+            var on = new List<int>();
+            foreach (var (player, _) in ParseRbModeList(rbVal))
+                if (player >= 1 && player <= 4 && !on.Contains(player))
+                {
+                    PlayerStates[player - 1].RbMode = true;
+                    on.Add(player);
+                }
+
+            Console.WriteLine(on.Count > 0
+                ? $"[Config] RB mode enabled for player(s): {string.Join(", ", on)}"
+                : "[Config] RB mode disabled (no players listed)");
+            Console.WriteLine($"[Config] Counter colours: {(CounterColors.Count > 0 ? string.Join(", ", CounterColors.Select(kv => $"{kv.Key}={kv.Value}")) : "defaults")}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Config] Failed to read config.ini: {ex.Message}");
+        }
+    }
+
+    // Parses "rbModePlayers" values like "1,3" or "1,2,3,4,5(1,2),15(1,2,3,4)".
+    // Each entry is a player number with optional parenthesised sub-options (commas
+    // inside the parens are respected). Sub-options are captured but not yet used.
+    static List<(int player, int[] opts)> ParseRbModeList(string val)
+    {
+        var result = new List<(int, int[])>();
+        if (string.IsNullOrWhiteSpace(val)) return result;
+
+        // Split on top-level commas only (ignore commas inside parentheses)
+        var tokens = new List<string>();
+        int depth = 0, start = 0;
+        for (int i = 0; i < val.Length; i++)
+        {
+            char c = val[i];
+            if (c == '(') depth++;
+            else if (c == ')') depth = Math.Max(0, depth - 1);
+            else if (c == ',' && depth == 0) { tokens.Add(val.Substring(start, i - start)); start = i + 1; }
+        }
+        tokens.Add(val.Substring(start));
+
+        foreach (var raw in tokens)
+        {
+            var tok = raw.Trim();
+            int j = 0;
+            while (j < tok.Length && char.IsDigit(tok[j])) j++;
+            if (j == 0 || !int.TryParse(tok.Substring(0, j), out int player)) continue;
+
+            int[] opts = Array.Empty<int>();
+            int lp = tok.IndexOf('(');
+            if (lp >= 0)
+            {
+                int rp = tok.IndexOf(')', lp);
+                if (rp > lp)
+                    opts = tok.Substring(lp + 1, rp - lp - 1)
+                        .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                        .Select(s => int.TryParse(s, out int v) ? v : -1)
+                        .Where(v => v >= 0).ToArray();
+            }
+            result.Add((player, opts));
+        }
+        return result;
     }
 
     // =========================================================================
@@ -85,7 +254,8 @@ class GHService
         lock (ClientLock) { Clients.Add(ws); SendLocks[ws] = new SemaphoreSlim(1, 1); }
         Console.WriteLine("[CHEAPO] Overlay connected");
 
-        // Send current state for all players immediately
+        // Send counter colours (config.ini) + current state for all players immediately
+        await SendRaw(ws, new { type = "colors", colors = CounterColors });
         for (int p = 0; p < 4; p++) await SendState(ws, PlayerStates[p]);
 
         // Keep alive until disconnected
@@ -112,6 +282,19 @@ class GHService
         if (ws.State != WebSocketState.Open) return;
         var json = JsonSerializer.Serialize(state);
         var bytes = Encoding.UTF8.GetBytes(json);
+        try
+        {
+            await ws.SendAsync(new ArraySegment<byte>(bytes),
+                WebSocketMessageType.Text, true, CancellationToken.None);
+        }
+        catch { }
+    }
+
+    // Sends an arbitrary JSON object (e.g. the counter-colours message) to one client.
+    static async Task SendRaw(WebSocket ws, object obj)
+    {
+        if (ws.State != WebSocketState.Open) return;
+        var bytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(obj));
         try
         {
             await ws.SendAsync(new ArraySegment<byte>(bytes),
@@ -211,8 +394,11 @@ class GHService
             newState.SoloB = cur.SoloB;
             newState.SoloO = cur.SoloO;
 
-            // Star power is managed by PollGHWTDE — always preserve here.
+            // Star power is managed by PollGHWTDE / PollEncore — always preserve here.
             newState.StarPower = cur.StarPower;
+
+            // RB mode comes from config.ini at startup and never changes from input — preserve it.
+            newState.RbMode = cur.RbMode;
 
             if (newState.Equals(cur)) return;
             PlayerStates[player] = newState;
@@ -294,6 +480,7 @@ class GHService
     const ushort XINPUT_BTN_Y      = 0x8000; // Yellow fret/ Yellow drum pad
     const ushort XINPUT_BTN_LB     = 0x0100; // Orange fret / Kick pedal
     const ushort XINPUT_BTN_RB     = 0x0200; // (unused for guitars) / 2nd kick or extra pad
+    const ushort XINPUT_BTN_BACK   = 0x0020; // Back/Select — overlay uses it (with all 5 frets) to reset hit counters
 
     // XInput device subtypes
     const byte XINPUT_DEVSUBTYPE_DRUM_KIT  = 0x08;
@@ -385,6 +572,8 @@ class GHService
                     if ((pressed & XINPUT_BTN_Y)  != 0) FlashPlayerDrumPad((int)i, 'Y');
                     if ((pressed & XINPUT_BTN_X)  != 0) FlashPlayerDrumPad((int)i, 'B');
                     if ((pressed & XINPUT_BTN_LB) != 0) FlashPlayerDrumPad((int)i, 'K');
+                    // Back/Select — momentary flag the overlay uses to complete the drum reset gesture
+                    if ((pressed & XINPUT_BTN_BACK) != 0) FlashPlayerSelect((int)i);
                 }
                 else if (slotType[i] == 2)
                 {
@@ -412,7 +601,8 @@ class GHService
                         GuitarName     = $"XInput Keyboard {i}",
                         InstrumentType = "keys",
                         G = g, R = r, Y = y, B = b, O = o,
-                        Strum = "neutral"
+                        Strum = "neutral",
+                        Select = (gp.wButtons & XINPUT_BTN_BACK) != 0
                     });
                 }
                 else if (slotType[i] == 3)
@@ -473,7 +663,8 @@ class GHService
                         Y = !anySolo && y,
                         B = !anySolo && b,
                         O = !anySolo && o,
-                        Strum = strum
+                        Strum = strum,
+                        Select = (gp.wButtons & XINPUT_BTN_BACK) != 0
                     });
                     UpdatePlayerSoloFrets((int)i,
                         anySolo && g,
@@ -512,13 +703,30 @@ class GHService
                         GuitarName     = $"XInput Controller {i}",
                         InstrumentType = "guitar",
                         G = g, R = r, Y = y, B = b, O = o,
-                        Strum = strum
+                        Strum = strum,
+                        Select = (gp.wButtons & XINPUT_BTN_BACK) != 0
                     });
                 }
             }
 
             Thread.Sleep(4); // ~250hz polling
         }
+    }
+
+    // Momentary Select pulse (120 ms) — overlay watches it to confirm the drum reset gesture
+    static void FlashPlayerSelect(int player)
+    {
+        lock (StateLocks[player]) {
+            PlayerStates[player].Select = true;
+            BroadcastPlayerState(player, PlayerStates[player]);
+        }
+        ThreadPool.QueueUserWorkItem(_ => {
+            Thread.Sleep(120);
+            lock (StateLocks[player]) {
+                PlayerStates[player].Select = false;
+                BroadcastPlayerState(player, PlayerStates[player]);
+            }
+        });
     }
 
     // Shared by XInput drum path and MIDI path — flash a drum pad for 120 ms
@@ -1289,6 +1497,12 @@ class GHService
     // VIDs of well-known PS2 adapter chipset manufacturers.
     static readonly ushort[] PS2_ADAPTER_VIDS = { 0x0810, 0x0E8F, 0x0079, 0x0583, 0x11FF };
 
+    // Set CHEAPO_PS2_DEBUG=1 to dump raw report bytes (and parsed fret state)
+    // on every change — used to see exactly what the adapter sends when frets
+    // are combined (e.g. all five held at once).
+    static readonly bool PS2_DEBUG =
+        Environment.GetEnvironmentVariable("CHEAPO_PS2_DEBUG") == "1";
+
     // Strings that disqualify a device from being treated as a PS2 adapter.
     static readonly string[] PS2_EXCLUSIONS =
     {
@@ -1550,6 +1764,7 @@ class GHService
     static void PollWithCalibration(IntPtr handle, PS2Calibration cal, int player)
     {
         var buf = new byte[64];
+        byte[]? dbgLast = null;
         while (true)
         {
             if (!ReadFile(handle, buf, (uint)buf.Length, out uint n, IntPtr.Zero) || n == 0)
@@ -1562,6 +1777,19 @@ class GHService
             bool o  = IsPressed(buf, cal.Orange);
             bool su = IsPressed(buf, cal.StrumUp);
             bool sd = IsPressed(buf, cal.StrumDown);
+
+            if (PS2_DEBUG)
+            {
+                var frame = buf[..(int)Math.Min(n, 12)];
+                if (dbgLast == null || !frame.SequenceEqual(dbgLast))
+                {
+                    dbgLast = frame;
+                    string hex = string.Join(" ", frame.Select((v, i) => $"[{i}]{v:X2}"));
+                    Console.WriteLine($"[PS2] raw {hex}  | " +
+                        $"G={(g?1:0)} R={(r?1:0)} Y={(y?1:0)} B={(b?1:0)} O={(o?1:0)} " +
+                        $"SU={(su?1:0)} SD={(sd?1:0)}");
+                }
+            }
 
             UpdatePlayerState(player, new GuitarState
             {
@@ -2055,187 +2283,420 @@ class GHService
         }
     }
 
+    // TickCount64 of the last Encore bridge packet.  While packets are arriving the
+    // in-game UDP hook is authoritative, so the memory scanner (PollEncore) stands down.
+    static long _encoreBridgeLastMs = -60_000;
+
+    // Receives datagrams from Encore's built-in overlay hook (overlayHook.cpp), which
+    // sends {"player":<int>,"sp":<bool>,"fill":<0..1>} over UDP to localhost:2830 when
+    // overdrive toggles.  Preferred over the memory scanner when present.
+    static async Task PollEncoreBridge()
+    {
+        const int PORT = 2830;
+        Console.WriteLine($"[Encore] Bridge listener started on UDP {PORT}");
+
+        UdpClient udp;
+        try
+        {
+            udp = new UdpClient(new IPEndPoint(IPAddress.Loopback, PORT));
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Encore] Failed to bind UDP {PORT}: {ex.Message} — bridge disabled");
+            return;
+        }
+
+        using (udp)
+        while (true)
+        {
+            try
+            {
+                var result = await udp.ReceiveAsync();
+                string json = Encoding.UTF8.GetString(result.Buffer);
+                using var doc = JsonDocument.Parse(json);
+                var root   = doc.RootElement;
+                int player = root.GetProperty("player").GetInt32();
+                bool sp    = root.GetProperty("sp").GetBoolean();
+                _encoreBridgeLastMs = Environment.TickCount64;
+                SetStarPowerForPlayer(player, sp);
+                Console.WriteLine($"[Encore] (bridge) Player {player} star power → {(sp ? "ACTIVE" : "off")}");
+            }
+            catch (ObjectDisposedException) { break; }
+            catch { /* malformed packet — ignore and keep listening */ }
+        }
+    }
+
     // =========================================================================
-    // RB3DX STAR POWER READER — RPCS3 (PS3 emulator)
-    // Rock Band 3 Deluxe runs inside RPCS3. The PS3 guest memory is a large
-    // MEM_PRIVATE allocation above 4 GB in the RPCS3 host process VA space.
+    // CLONE HERO STAR POWER — screen reader
+    // Clone Hero is IL2CPP under StrikeCore anti-cheat (re-obfuscated every build),
+    // so its memory can't be read reliably.  Deployed star power floods the highway
+    // with the configured SP colour, so we watch the screen instead: GDI-capture the
+    // game window's highway region and measure the fraction of pixels whose hue
+    // matches the SP colour.  Off: a few percent.  Deployed: 25-37%.  Needs nothing
+    // installed in the game, and survives game updates (StrikeCore can't reskin the
+    // pixels it draws).  SP colour comes from the user's colour profile so custom
+    // themes work; falls back to cyan.
+    // =========================================================================
+    [DllImport("user32.dll")] static extern IntPtr GetDC(IntPtr h);
+    [DllImport("user32.dll")] static extern int ReleaseDC(IntPtr h, IntPtr dc);
+    [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr h, out ChRect r);
+    [DllImport("gdi32.dll")]  static extern IntPtr CreateCompatibleDC(IntPtr dc);
+    [DllImport("gdi32.dll")]  static extern IntPtr CreateCompatibleBitmap(IntPtr dc, int w, int h);
+    [DllImport("gdi32.dll")]  static extern IntPtr SelectObject(IntPtr dc, IntPtr o);
+    [DllImport("gdi32.dll")]  static extern bool BitBlt(IntPtr d, int dx, int dy, int w, int h, IntPtr s, int sx, int sy, int rop);
+    [DllImport("gdi32.dll")]  static extern bool DeleteObject(IntPtr o);
+    [DllImport("gdi32.dll")]  static extern bool DeleteDC(IntPtr dc);
+    [DllImport("gdi32.dll")]  static extern int GetDIBits(IntPtr dc, IntPtr bmp, uint start, uint lines, byte[] bits, ref ChBmi bi, uint usage);
+
+    [StructLayout(LayoutKind.Sequential)] struct ChRect { public int L, T, R, B; }
+    [StructLayout(LayoutKind.Sequential)] struct ChBmiHeader { public uint biSize; public int biWidth, biHeight; public ushort biPlanes, biBitCount; public uint biCompression, biSizeImage; public int biXPPM, biYPPM; public uint biClrUsed, biClrImportant; }
+    [StructLayout(LayoutKind.Sequential)] struct ChBmi { public ChBmiHeader h; public uint col; }
+
+    static void PollCloneHero()
+    {
+        const string PROC_NAME = "Clone Hero";
+        // Highway region as fractions of the window (lower-centre where the board sits).
+        const double FX0 = 0.18, FX1 = 0.82, FY0 = 0.45, FY1 = 0.95;
+        const double HUE_TOL = 30.0;     // degrees from the SP hue
+        const int    MIN_CHROMA = 25;    // ignore near-grey pixels
+        const double ON_FRAC = 0.10;     // SP on above this matched-pixel fraction
+
+        Console.WriteLine("[CloneHero] Star power screen reader started");
+        double spHue = ReadSpHue();
+        Console.WriteLine($"[CloneHero] SP hue {spHue:0} deg");
+
+        bool lastSP = false;
+        int agree = 0;
+
+        while (true)
+        {
+            var procs = Process.GetProcessesByName(PROC_NAME);
+            if (procs.Length == 0 || procs[0].MainWindowHandle == IntPtr.Zero)
+            {
+                if (lastSP) { SetStarPowerAll(false); lastSP = false; }
+                Thread.Sleep(1000);
+                continue;
+            }
+
+            IntPtr hwnd = procs[0].MainWindowHandle;
+            if (!GetWindowRect(hwnd, out var rc)) { Thread.Sleep(500); continue; }
+            int w = rc.R - rc.L, h = rc.B - rc.T;
+            if (w < 200 || h < 200) { Thread.Sleep(500); continue; }
+
+            int bx = rc.L + (int)(w * FX0), by = rc.T + (int)(h * FY0);
+            int bw = (int)(w * (FX1 - FX0)), bh = (int)(h * (FY1 - FY0));
+            double frac = MatchedFraction(bx, by, bw, bh, spHue, HUE_TOL, MIN_CHROMA);
+
+            bool now = frac >= ON_FRAC;
+            if (now != lastSP)
+            {
+                if (++agree >= 2)   // require 2 consecutive readings to flip
+                {
+                    lastSP = now; agree = 0;
+                    SetStarPowerAll(now);
+                    Console.WriteLine($"[CloneHero] Star power → {(now ? "ACTIVE" : "off")} (frac {frac:0.000})");
+                }
+            }
+            else agree = 0;
+            Thread.Sleep(66);
+        }
+    }
+
+    // Fraction of pixels in a screen rect whose hue is within tol of targetHue.
+    static double MatchedFraction(int sx, int sy, int w, int h, double targetHue, double tol, int minChroma)
+    {
+        IntPtr screen = GetDC(IntPtr.Zero);
+        IntPtr mem = CreateCompatibleDC(screen);
+        IntPtr bmp = CreateCompatibleBitmap(screen, w, h);
+        IntPtr old = SelectObject(mem, bmp);
+        BitBlt(mem, 0, 0, w, h, screen, sx, sy, 0x00CC0020);
+
+        var bi = new ChBmi();
+        bi.h.biSize = (uint)Marshal.SizeOf<ChBmiHeader>();
+        bi.h.biWidth = w; bi.h.biHeight = -h; bi.h.biPlanes = 1; bi.h.biBitCount = 32;
+        var bits = new byte[w * h * 4];
+        GetDIBits(mem, bmp, 0, (uint)h, bits, ref bi, 0);
+
+        SelectObject(mem, old); DeleteObject(bmp); DeleteDC(mem); ReleaseDC(IntPtr.Zero, screen);
+
+        int matched = 0, total = 0;
+        for (int y = 0; y < h; y += 3)
+            for (int x = 0; x < w; x += 3)
+            {
+                int o = (y * w + x) * 4;
+                int b = bits[o], g = bits[o + 1], r = bits[o + 2];
+                int mx = Math.Max(r, Math.Max(g, b)), mn = Math.Min(r, Math.Min(g, b));
+                int chroma = mx - mn;
+                total++;
+                if (chroma < minChroma) continue;
+                double hue = HueOf(r, g, b, mx, chroma);
+                double d = Math.Abs(hue - targetHue); if (d > 180) d = 360 - d;
+                if (d <= tol) matched++;
+            }
+        return total == 0 ? 0 : (double)matched / total;
+    }
+
+    static double HueOf(int r, int g, int b, int mx, int chroma)
+    {
+        double h;
+        if (mx == r) h = (g - b) / (double)chroma % 6;
+        else if (mx == g) h = (b - r) / (double)chroma + 2;
+        else h = (r - g) / (double)chroma + 4;
+        h *= 60; if (h < 0) h += 360;
+        return h;
+    }
+
+    // Hue (degrees) of general_sp from the user's colour profile; cyan if unavailable.
+    static double ReadSpHue()
+    {
+        try
+        {
+            string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+                "Clone Hero", "Custom", "Colors");
+            string ini = Path.Combine(dir, "DefaultColors.ini");
+            if (File.Exists(ini))
+                foreach (var line in File.ReadAllLines(ini))
+                {
+                    var t = line.Trim();
+                    if (!t.StartsWith("general_sp", StringComparison.OrdinalIgnoreCase)) continue;
+                    int hash = t.IndexOf('#');
+                    if (hash >= 0 && hash + 6 < t.Length + 1)
+                    {
+                        int rgb = Convert.ToInt32(t.Substring(hash + 1, 6), 16);
+                        int r = (rgb >> 16) & 0xFF, g = (rgb >> 8) & 0xFF, b = rgb & 0xFF;
+                        int mx = Math.Max(r, Math.Max(g, b)), mn = Math.Min(r, Math.Min(g, b));
+                        if (mx - mn == 0) break;
+                        return HueOf(r, g, b, mx, mx - mn);
+                    }
+                }
+        }
+        catch { }
+        return 180.0; // cyan
+    }
+
+    // =========================================================================
+    // FORTNITE FESTIVAL OVERDRIVE — screen reader
+    // Fortnite runs under Easy Anti-Cheat, so its memory is off-limits.  Overdrive
+    // has no separate HUD readout; the only localised tell is the circular score
+    // multiplier badge ("4x", "8x") at the bottom-centre of the highway: its ring
+    // is teal/cyan in normal play and turns gold/orange the instant overdrive is
+    // active (the surrounding fretboard flames go gold too).  So we watch that one
+    // badge — GDI-capture a tight box around it and measure the fraction of pixels
+    // on the gold hue.  The two states are ~140 deg apart, so the signal is clean.
+    // External capture only: no injection, survives game updates.
+    // =========================================================================
+    static void PollFortnite()
+    {
+        const string PROC_NAME = "FortniteClient-Win64-Shipping";
+        // Combo/multiplier badge box as fractions of the window (bottom-centre of
+        // the highway, anchored on the badge ~0.51x / 0.88y, ~75px across).
+        const double FX0 = 0.470, FX1 = 0.545, FY0 = 0.825, FY1 = 0.935;
+        const double GOLD_HUE = 38.0;    // overdrive badge ring / flame accents
+        const double HUE_TOL  = 18.0;    // tight: excludes teal ring, green lanes
+        const int    MIN_CHROMA = 40;    // ignore white score text and near-grey
+        const double ON_FRAC = 0.10;     // overdrive on above this gold fraction
+
+        Console.WriteLine("[Fortnite] Festival overdrive screen reader started");
+
+        bool lastSP = false;
+        int agree = 0;
+
+        while (true)
+        {
+            var procs = Process.GetProcessesByName(PROC_NAME);
+            if (procs.Length == 0 || procs[0].MainWindowHandle == IntPtr.Zero)
+            {
+                if (lastSP) { SetStarPowerAll(false); lastSP = false; }
+                Thread.Sleep(1000);
+                continue;
+            }
+
+            IntPtr hwnd = procs[0].MainWindowHandle;
+            if (!GetWindowRect(hwnd, out var rc)) { Thread.Sleep(500); continue; }
+            int w = rc.R - rc.L, h = rc.B - rc.T;
+            if (w < 200 || h < 200) { Thread.Sleep(500); continue; }
+
+            int bx = rc.L + (int)(w * FX0), by = rc.T + (int)(h * FY0);
+            int bw = (int)(w * (FX1 - FX0)), bh = (int)(h * (FY1 - FY0));
+            double frac = MatchedFraction(bx, by, bw, bh, GOLD_HUE, HUE_TOL, MIN_CHROMA);
+
+            bool now = frac >= ON_FRAC;
+            if (now != lastSP)
+            {
+                if (++agree >= 2)   // require 2 consecutive readings to flip
+                {
+                    lastSP = now; agree = 0;
+                    SetStarPowerAll(now);
+                    Console.WriteLine($"[Fortnite] Overdrive → {(now ? "ACTIVE" : "off")} (frac {frac:0.000})");
+                }
+            }
+            else agree = 0;
+            Thread.Sleep(66);
+        }
+    }
+
+
+    // =========================================================================
+    // ENCORE OVERDRIVE READER — struct-pattern scan
+    // Encore is a native 64-bit C++ rhythm game.  We locate the
+    // Overdrive struct in its heap by matching the known layout from
+    // Encore::RhythmEngine::Overdrive (Overdrive.cpp):
     //
-    // PPC/Cell is big-endian.  OverdriveMeter::mState (offset +0x18c from
-    // object base, 4-byte big-endian enum) holds:
-    //   0 = initial  1 = filling  2 = ready  3 = deploying (SP active)
-    // We read only the LSB (offset +0x18f) and compare to 3.
+    //   offset  0  bool   Active           — 0 or 1
+    //   offset  1  bool   UseOverdriveLift — 0 or 1
+    //   offset  2  byte[2] padding         — typically 0x00 0x00
+    //   offset  4  float  Fill             — clamped to [0.0, 1.0]
+    //   offset  8  double ActivationTime   — finite, ≥ 0
+    //   offset 16  double ActivationTick   — finite, ≥ 0
     //
-    // ── Structural scan — no hardcoded bytes needed ───────────────────────────
-    // OverdriveMeter (HMX engine, same source as Wii decomp DarkRTA/rb3) has
-    // 7 consecutive ObjPtr<T,D> fields starting at object+0x190.  Each ObjPtr
-    // is 12 bytes: [vtable(4)][mOwner=this(4)][mPtr(4)].
-    // Because PS3 has no ASLR, both vtable and mOwner are invariant per-session:
-    //   • vtable  — ObjRef vtable; same PS3 EA for every ObjPtr of this type
-    //   • mOwner  — self-referential pointer back to the OverdriveMeter object
-    // We scan for position i (4-byte aligned) where:
-    //   buf[i..i+3]   == buf[i+12..i+15]   (vtable repeats at next ObjPtr)
-    //   buf[i+4..i+7] == buf[i+16..i+19]   (mOwner repeats at next ObjPtr)
-    //   BEU32(buf,i+4) == (readAt+i−memBase) − 0x190   (self-referential check)
-    //   BEU32(buf,i−4) ≤ 3                 (mState LSB sanity)
-    // Return value: host VA of mState LSB = readAt + i − 1.
+    // Active is broadcast as star power.  Fill and ActivationTime are used
+    // as post-match validity checks to detect struct staleness.
     // =========================================================================
 
-    // Finds the base host address of RPCS3's PS3 guest-memory allocation.
-    // RPCS3 commits PS3 pages as MEM_PRIVATE; this returns the AllocationBase
-    // with the most committed private bytes above 4 GB (that's the PS3 mapping).
-    static long FindRpcs3MemBase(IntPtr hProcess)
+    // Reads a process module image [modBase, modEnd) into a byte[] (zero-filled where
+    // a page can't be read).  Used to parse MSVC RTTI for an exact vtable address.
+    static byte[] ReadImage(IntPtr hProcess, long modBase, long modEnd)
     {
+        int size = (int)(modEnd - modBase);
+        var img = new byte[size];
+        const int CH = 0x10000;
+        for (long off = 0; off < size; off += CH)
+        {
+            int want = (int)Math.Min(CH, size - off);
+            var tmp = new byte[want];
+            if (ReadProcessMemory(hProcess, new IntPtr(modBase + off), tmp, want, out int got) && got > 0)
+                Array.Copy(tmp, 0, img, (int)off, got);
+        }
+        return img;
+    }
+
+    static int IndexOfBytes(byte[] hay, byte[] needle, int start)
+    {
+        int end = hay.Length - needle.Length;
+        for (int i = start; i <= end; i++)
+        {
+            int j = 0;
+            while (j < needle.Length && hay[i + j] == needle[j]) j++;
+            if (j == needle.Length) return i;
+        }
+        return -1;
+    }
+
+    // Resolves the absolute VA of a class's vtable from MSVC x64 RTTI, given the start
+    // of its mangled type-descriptor name (e.g. ".?AVGuitarStats").  Returns 0 if not
+    // found (caller falls back to a heuristic scan).
+    //
+    // MSVC x64 RTTI chain:
+    //   TypeDescriptor { void* pVFTable; void* spare; char name[]; }  — name at +16
+    //   CompleteObjectLocator { u32 sig=1; u32 off; u32 cdOff; u32 pTypeDescriptor(RVA);
+    //                           u32 pClassDescriptor(RVA); u32 pSelf(RVA); }
+    //   vtable[-1] = absolute VA of the COL; the object's vtable ptr = that slot + 8.
+    static long ResolveVtableMSVC(byte[] img, long modBase, string mangledNameStart)
+    {
+        byte[] pat = System.Text.Encoding.ASCII.GetBytes(mangledNameStart);
+        int nameOff = IndexOfBytes(img, pat, 0);
+        if (nameOff < 16) return 0;
+        long tdRva = nameOff - 16; // TypeDescriptor base (name lives at TD+16)
+
+        long colRva = -1;
+        for (int p = 0; p + 24 <= img.Length; p += 4)
+        {
+            if (BitConverter.ToInt32(img, p) != 1) continue;                  // signature (x64)
+            if (BitConverter.ToUInt32(img, p + 12) != (uint)tdRva) continue;  // -> our TypeDescriptor
+            if (BitConverter.ToUInt32(img, p + 20) != (uint)p) continue;      // pSelf == own RVA
+            colRva = p;
+            break;
+        }
+        if (colRva < 0) return 0;
+        long colVA = modBase + colRva;
+
+        for (int q = 0; q + 8 <= img.Length; q += 8)
+            if (BitConverter.ToInt64(img, q) == colVA)
+                return modBase + q + 8; // vtable ptr objects carry at offset 0
+
+        return 0;
+    }
+
+    // Scans the Encore heap for BaseStats objects via a vtable anchor.
+    //
+    // Encore's BaseStats<LaneCount> (and GuitarStats : BaseStats<5>) has a virtual
+    // destructor, so every instance carries a vtable pointer at offset 0 that points
+    // into the Encore.exe image.  That pointer is a hard anchor — random heap data
+    // almost never has offset 0 = a pointer into the (small) exe image AND every
+    // BaseStats field sane.  The Overdrive fields sit before the LaneCount-dependent
+    // HeldFrets array, so these offsets are identical for guitar, drums and keys:
+    //
+    // Real layout confirmed from the game's own write instructions (Cheat Engine):
+    // the stats object holds an Overdrive sub-object at +0x98, and Active is written by
+    //   mov byte ptr [rcx+0x18],01   (rcx = object+0x98)  -> Active at object+0xB0
+    //   mov byte ptr [rbx+0xB0],00   (rbx = object)       -> same byte
+    //
+    //   +0     vtable ptr           -> GuitarStats/Drums/Pad vtable (RTTI-resolved)
+    //   +0x98  Overdrive.Fill       double [0,1]
+    //   +0xA0  Overdrive.ActTime    double (finite)
+    //   +0xA8  Overdrive.ActTick    double (finite)
+    //   +0xB0  Overdrive.Active     bool (0/1)   <- the star-power flag
+    static List<IntPtr> ScanEncoreStats(IntPtr hProcess, long modBase, long modEnd, HashSet<long> targetVtables)
+    {
+        var results = new List<IntPtr>();
         uint mbiSz = (uint)Marshal.SizeOf<MEMORY_BASIC_INFORMATION>();
         const uint MEM_COMMIT  = 0x1000;
         const uint MEM_PRIVATE = 0x20000;
-        const long SCAN_FROM   = 0x100000000L;   // 4 GB — above RPCS3's own heap
-        const long SCAN_TO     = 0x800000000L;   // 32 GB upper bound
-        const long MIN_COMMIT  = 0x02000000L;    // ≥ 32 MB to qualify
-
-        var  byAlloc = new Dictionary<long, long>(); // AllocationBase → committed bytes
-        long addr    = SCAN_FROM;
-
-        while (addr < SCAN_TO)
-        {
-            if (VirtualQueryEx(hProcess, new IntPtr(addr), out var mbi, mbiSz) == IntPtr.Zero) break;
-            long regionBase = mbi.BaseAddress.ToInt64();
-            long regionSize = mbi.RegionSize.ToInt64();
-            if (regionSize <= 0) { addr = Math.Max(addr + 0x1000L, regionBase + 0x1000L); continue; }
-
-            if (mbi.State == MEM_COMMIT && mbi.Type == MEM_PRIVATE)
-            {
-                long allocBase = mbi.AllocationBase.ToInt64();
-                if (allocBase >= SCAN_FROM)
-                {
-                    byAlloc.TryGetValue(allocBase, out long prev);
-                    byAlloc[allocBase] = prev + regionSize;
-                }
-            }
-
-            addr = regionBase + Math.Max(regionSize, 0x1000L);
-        }
-
-        long bestBase = 0, bestCommit = 0;
-        foreach (var kv in byAlloc)
-            if (kv.Value > bestCommit) { bestBase = kv.Key; bestCommit = kv.Value; }
-
-        return bestCommit >= MIN_COMMIT ? bestBase : 0;
-    }
-
-    // Structural scan for OverdriveMeter in RPCS3.
-    //
-    // Previous approach assumed PS3 XDR was one contiguous host allocation starting
-    // at memBase.  Diagnostic output showed RPCS3 actually spreads PS3 memory across
-    // multiple separate host allocations (code segment, heap, etc.) — the old window
-    // missed the heap entirely.
-    //
-    // New approach: scan ALL committed regions in the RPCS3 host VA range (4 GB–32 GB)
-    // and INFER memBase from the ObjPtr self-referential pointer.
-    //   • Found mResetTrig vtable at host VA H, mOwner stores PS3 EA V2
-    //   • mResetTrig is at object+0x190, so object PS3 EA = V2
-    //   • memBase = H − V2 − 0x190
-    // This works regardless of how RPCS3 partitions its host VA space.
-    //
-    // Returns host VA of mState LSB (object+0x18f) and sets foundMemBase.
-    // Returns all OverdriveMeter mState LSB addresses found (deduplicated by PS3 EA).
-    // foundMemBase is set from the first match — used only for re-verification.
-    static List<IntPtr> AobScanRb3(IntPtr hProcess, out long foundMemBase)
-    {
-        foundMemBase = 0;
-        var results  = new List<IntPtr>();
-        var seenEA   = new HashSet<uint>(); // deduplicate by mOwner (PS3 EA of object)
-        uint  mbiSz = (uint)Marshal.SizeOf<MEMORY_BASIC_INFORMATION>();
-        const uint MEM_COMMIT  = 0x1000;
+        const uint MEM_MAPPED  = 0x40000;
+        const uint MEM_IMAGE   = 0x1000000;
         const uint PAGE_GUARD  = 0x100;
         const uint PAGE_NOACC  = 0x01;
-        const int  CHUNK       = 16 * 1024 * 1024;
-        const long SCAN_FROM   = 0x100000000L;  // 4 GB
-        const long SCAN_TO     = 0x800000000L;  // 32 GB
+        const uint PAGE_EXEC   = 0x10;
+        const int  NEED = 0xB8; // read through Active at +0xB0
 
-        long addr       = SCAN_FROM;
-        int  regions    = 0;
-        long bytes      = 0;
-        int  diagMstate = 0, diagObjPtr = 0, diagOwner = 0, diagAlign = 0;
+        long addr = 0x00010000L;
+        long ceil = 0x7FFFFFFF0000L;
 
-        while (addr < SCAN_TO)
+        while (addr < ceil)
         {
             if (VirtualQueryEx(hProcess, new IntPtr(addr), out var mbi, mbiSz) == IntPtr.Zero) break;
             long regionBase = mbi.BaseAddress.ToInt64();
             long regionSize = mbi.RegionSize.ToInt64();
             if (regionSize <= 0) { addr = Math.Max(addr + 0x1000L, regionBase + 0x1000L); continue; }
 
-            uint baseProt  = mbi.Protect & 0xFF;
-            bool scannable = mbi.State == MEM_COMMIT
-                && (mbi.Protect & PAGE_GUARD) == 0
-                && baseProt != PAGE_NOACC && baseProt != 0x10
-                && regionSize >= 24;
+            uint baseProt = mbi.Protect & 0xFF;
+            bool ok = mbi.State == MEM_COMMIT &&
+                      (mbi.Type == MEM_PRIVATE || mbi.Type == MEM_MAPPED) &&
+                      mbi.Type != MEM_IMAGE &&
+                      (mbi.Protect & PAGE_GUARD) == 0 &&
+                      baseProt != PAGE_NOACC && baseProt != PAGE_EXEC &&
+                      regionSize >= NEED;
 
-            if (scannable)
+            if (ok)
             {
-                long regionEnd = Math.Min(regionBase + regionSize, SCAN_TO);
+                const int CHUNK = 4 * 1024 * 1024;
+                long regionEnd = regionBase + regionSize;
                 long readAt    = regionBase;
+
                 while (readAt < regionEnd)
                 {
                     int toRead = (int)Math.Min(CHUNK, regionEnd - readAt);
                     var buf    = new byte[toRead];
-                    if (!ReadProcessMemory(hProcess, new IntPtr(readAt), buf, toRead, out int nRead)
-                        || nRead < 24)
+                    if (!ReadProcessMemory(hProcess, new IntPtr(readAt), buf, toRead, out int nRead) || nRead < NEED)
+                    { readAt += nRead > 0 ? nRead : CHUNK; continue; }
+
+                    // Objects are pointer-aligned — step 8.
+                    for (int i = 0; i + NEED <= nRead; i += 8)
                     {
-                        readAt += nRead > 0 ? nRead : CHUNK; continue;
-                    }
-                    regions++; bytes += nRead;
-
-                    // Need buf[i+28..i+31] for the third ObjPtr owner → stop at nRead-32
-                    for (int i = 4; i <= nRead - 32; i += 4)
-                    {
-                        // ── mState pre-filter: 4-byte BE enum, top 3 bytes = 0x00 ──────
-                        if (buf[i-4] != 0 || buf[i-3] != 0 || buf[i-2] != 0) continue;
-                        if (buf[i-1] > 3) continue;
-                        diagMstate++;
-
-                        // ── vtable + mOwner must repeat at ObjPtr #2 (+12) and #3 (+24) ─
-                        // Checking three consecutive ObjPtrs makes false positives vanishingly rare.
-                        if (buf[i]   != buf[i+12] || buf[i+1] != buf[i+13] ||
-                            buf[i+2] != buf[i+14] || buf[i+3] != buf[i+15] ||
-                            buf[i]   != buf[i+24] || buf[i+1] != buf[i+25] ||
-                            buf[i+2] != buf[i+26] || buf[i+3] != buf[i+27]) continue;
-
-                        if (buf[i+4] != buf[i+16] || buf[i+5] != buf[i+17] ||
-                            buf[i+6] != buf[i+18] || buf[i+7] != buf[i+19] ||
-                            buf[i+4] != buf[i+28] || buf[i+5] != buf[i+29] ||
-                            buf[i+6] != buf[i+30] || buf[i+7] != buf[i+31]) continue;
-                        diagObjPtr++;
-
-                        // ── mOwner must be a plausible PS3 heap EA, and 4-byte aligned ──
-                        uint v2 = BEU32(buf, i + 4);
-                        if (v2 < 0x00100000u || v2 > 0x0FFF0000u) continue;
-                        if ((v2 & 3) != 0) continue;
-                        diagOwner++;
-
-                        // ── Vtable must also be a plausible PS3 code address, 4-byte aligned
-                        uint v1 = BEU32(buf, i);
-                        if (v1 < 0x00010000u || v1 > 0x0FFF0000u) continue;
-                        if ((v1 & 3) != 0) continue;
-                        // Reject repeating-value regions (vtable == mOwner is a red flag)
-                        if (v1 == v2) continue;
-
-                        // ── Infer memBase from the self-referential pointer ───────────────
-                        // host VA of position i  = readAt + i  (= PS3 EA of mResetTrig vtable)
-                        // PS3 EA of mResetTrig   = v2 + 0x190
-                        // so memBase             = (readAt + i) − v2 − 0x190
-                        long candidateBase = (readAt + i) - (long)v2 - 0x190L;
-                        if (candidateBase < SCAN_FROM || candidateBase >= SCAN_TO) continue;
-                        diagAlign++; // survived alignment gate (kept for diag counter continuity)
-
-                        if (seenEA.Add(v2))  // only record each PS3 EA once
-                        {
-                            if (foundMemBase == 0) foundMemBase = candidateBase;
-                            long spPtr = readAt + i - 1;
-                            results.Add(new IntPtr(spPtr));
-                            Console.WriteLine(
-                                $"[RB3DX] OverdriveMeter candidate: PS3 EA 0x{v2:X8} " +
-                                $"mState hostVA 0x{spPtr:X} ({results.Count} total)");
-                        }
+                        long vptr = BitConverter.ToInt64(buf, i);
+                        // Exact RTTI vtable match is the anchor (Guitar/Drums/Pad stats).
+                        // Fall back to "any pointer into image" only if RTTI resolve failed.
+                        if (targetVtables.Count > 0) { if (!targetVtables.Contains(vptr)) continue; }
+                        else if (vptr < modBase || vptr >= modEnd) continue;
+                        // Overdrive sub-object at +0x98 (offsets confirmed from the game's
+                        // write instructions). The vtable anchor already guarantees this is a
+                        // real stats object; these just reject partially-constructed ones.
+                        double fill = BitConverter.ToDouble(buf, i + 0x98);
+                        if (double.IsNaN(fill) || fill < 0.0 || fill > 1.0) continue;      // Fill
+                        if (!double.IsFinite(BitConverter.ToDouble(buf, i + 0xA0))) continue; // ActTime
+                        if (!double.IsFinite(BitConverter.ToDouble(buf, i + 0xA8))) continue; // ActTick
+                        if (buf[i + 0xB0] > 1) continue;                                   // Active bool
+                        results.Add(new IntPtr(readAt + i));
                     }
 
                     readAt += nRead > 0 ? nRead : CHUNK;
@@ -2245,214 +2706,320 @@ class GHService
             addr = regionBase + Math.Max(regionSize, 0x1000L);
         }
 
-        Console.WriteLine($"[RB3DX] Scan complete: {regions} regions, {bytes / 1024 / 1024} MB — {results.Count} candidate(s)");
-        Console.WriteLine($"[RB3DX] Diag: mState={diagMstate} ObjPtr={diagObjPtr} owner={diagOwner} survived={diagAlign}");
         return results;
     }
 
-    // Read a big-endian uint32 from a byte array.
-    static uint BEU32(byte[] b, int i) =>
-        ((uint)b[i] << 24) | ((uint)b[i+1] << 16) | ((uint)b[i+2] << 8) | b[i+3];
-
-    // One-shot diagnostic: lists every committed region within the 256 MB PS3 window
-    // and searches for the "OverdriveMeterDir" class-name string.  Runs once per
-    // RPCS3 session (immediately after memBase is found) and prints to console.
-    static void DiagnoseRpcs3Memory(IntPtr hProcess, long memBase)
+    static void PollEncore()
     {
-        uint  mbiSz       = (uint)Marshal.SizeOf<MEMORY_BASIC_INFORMATION>();
-        const uint  MEM_COMMIT = 0x1000;
-        const uint  PAGE_GUARD = 0x100;
-        const uint  PAGE_NOACC = 0x01;
-        const long  PS3_SZ     = 0x10000000L;  // 256 MB
-        long ceiling = memBase + PS3_SZ;
+        const string PROC_NAME = "Encore";
+        const int    POLL_MS   = 16;
+        const int    SCAN_MS   = 2000;
 
-        // UTF-8 / ASCII bytes for "OverdriveMeterDir"
-        byte[] needle = System.Text.Encoding.ASCII.GetBytes("OverdriveMeterDir");
+        Console.WriteLine("[Encore] Overdrive watcher started");
 
-        Console.WriteLine("[RB3DX diag] Committed regions in PS3 window:");
-        int  regionCount = 0;
-        long totalBytes  = 0;
-        bool stringFound = false;
+        IntPtr hProc   = IntPtr.Zero;
+        int    lastPid = -1;
+        long   modBase = 0, modEnd = 0;
+        var    statsVtables = new HashSet<long>();
+        var    statsAddrs = new List<IntPtr>();
+        bool   lastSP  = false;
 
-        long addr = memBase;
-        while (addr < ceiling)
+        while (true)
         {
-            if (VirtualQueryEx(hProcess, new IntPtr(addr), out var mbi, mbiSz) == IntPtr.Zero) break;
-            long rBase = mbi.BaseAddress.ToInt64();
-            long rSize = mbi.RegionSize.ToInt64();
-            if (rSize <= 0) { addr = Math.Max(addr + 0x1000, rBase + 0x1000); continue; }
-
-            uint prot = mbi.Protect & 0xFF;
-            if (mbi.State == MEM_COMMIT
-                && (mbi.Protect & PAGE_GUARD) == 0
-                && prot != PAGE_NOACC && prot != 0x10)
+            var procs = Process.GetProcessesByName(PROC_NAME);
+            if (procs.Length == 0)
             {
-                long ps3Start = rBase - memBase;
-                long ps3End   = ps3Start + rSize;
-                Console.WriteLine(
-                    $"[RB3DX diag]   PS3 EA 0x{ps3Start:X8}-0x{ps3End:X8}  " +
-                    $"({rSize / 1024} KB, type=0x{mbi.Type:X})");
-                regionCount++;
-                totalBytes += rSize;
-
-                // Scan for "OverdriveMeterDir"
-                if (!stringFound)
+                if (hProc != IntPtr.Zero)
                 {
-                    var buf = new byte[(int)Math.Min(rSize, 16 * 1024 * 1024)];
-                    if (ReadProcessMemory(hProcess, new IntPtr(rBase), buf, buf.Length, out int nr) && nr >= needle.Length)
+                    CloseHandle(hProc);
+                    hProc   = IntPtr.Zero;
+                    lastPid = -1;
+                    statsAddrs.Clear();
+                    Console.WriteLine("[Encore] Process gone — waiting...");
+                    SetStarPowerAll(false);
+                    lastSP = false;
+                }
+                Thread.Sleep(SCAN_MS);
+                continue;
+            }
+
+            var proc = procs[0];
+            foreach (var p in procs) if (p != proc) p.Dispose();
+
+            if (proc.Id != lastPid)
+            {
+                if (hProc != IntPtr.Zero) CloseHandle(hProc);
+                hProc   = OpenProcess(PROCESS_VM_READ | PROCESS_QUERY_LIMITED, false, proc.Id);
+                lastPid = proc.Id;
+                statsAddrs.Clear();
+                statsVtables.Clear();
+                if (hProc == IntPtr.Zero || hProc == INVALID_HANDLE_VALUE)
+                {
+                    Console.WriteLine($"[Encore] OpenProcess failed (err={Marshal.GetLastWin32Error()}) — retrying");
+                    proc.Dispose();
+                    Thread.Sleep(SCAN_MS);
+                    continue;
+                }
+                try
+                {
+                    var mm = proc.MainModule!;
+                    modBase = mm.BaseAddress.ToInt64();
+                    modEnd  = modBase + mm.ModuleMemorySize;
+                    Console.WriteLine($"[Encore] Attached PID {proc.Id} — Encore.exe 0x{modBase:X}..0x{modEnd:X}");
+
+                    // Resolve the exact stats vtables from RTTI so the heap scan matches only
+                    // real stats objects (not every vtable'd object).  One per instrument.
+                    var img = ReadImage(hProc, modBase, modEnd);
+                    foreach (var (name, mangled) in new[] {
+                        ("GuitarStats", ".?AVGuitarStats"),
+                        ("DrumsStats",  ".?AVDrumsStats"),
+                        ("PadStats",    ".?AVPadStats"),
+                    })
                     {
-                        for (int i = 0; i <= nr - needle.Length; i++)
-                        {
-                            bool match = true;
-                            for (int j = 0; j < needle.Length && match; j++)
-                                match = buf[i + j] == needle[j];
-                            if (match)
-                            {
-                                long ps3Ea = ps3Start + i;
-                                Console.WriteLine(
-                                    $"[RB3DX diag]   *** \"OverdriveMeterDir\" found at PS3 EA 0x{ps3Ea:X8} ***");
-                                stringFound = true;
-                                break;
-                            }
-                        }
+                        long vt = ResolveVtableMSVC(img, modBase, mangled);
+                        if (vt != 0) { statsVtables.Add(vt); Console.WriteLine($"[Encore] {name} vtable @ 0x{vt:X} (RTTI)"); }
                     }
+                    if (statsVtables.Count == 0)
+                        Console.WriteLine("[Encore] RTTI resolve failed — falling back to heuristic scan");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[Encore] Could not read module info ({ex.Message}) — retrying");
+                    CloseHandle(hProc); hProc = IntPtr.Zero; lastPid = -1;
+                    proc.Dispose();
+                    Thread.Sleep(SCAN_MS);
+                    continue;
                 }
             }
+            proc.Dispose();
 
-            addr = rBase + Math.Max(rSize, 0x1000L);
-            if (addr >= ceiling) break;
-        }
-
-        Console.WriteLine(
-            $"[RB3DX diag] Total: {regionCount} regions, {totalBytes / 1024 / 1024} MB committed. " +
-            $"Class name string: {(stringFound ? "FOUND" : "NOT FOUND")}");
-    }
-
-    // Controller-driven SP discovery — loops until narrowed to 1 candidate.
-    //   START  = baseline snapshot (SP not deployed)
-    //   SELECT = deploys SP + after snapshot
-    // Intersects hits across runs to eliminate false positives.
-    static void DiscoverSpFlag(IntPtr hProc, long memBase)
-    {
-        const ushort BTN_SELECT = 0x0020;
-        const ushort BTN_START  = 0x0010;
-        const long   PS3_START  = 0x00800000L;
-        const long   PS3_END    = 0x01000000L;
-        int  len   = (int)(PS3_END - PS3_START);
-        long hBase = memBase + PS3_START;
-
-        var votes = new Dictionary<uint, int>(); // PS3 EA → times seen
-        int run   = 0;
-
-        while (true)
-        {
-            run++;
-            Console.WriteLine($"[RB3DX] Discovery run {run} — press ENTER with SP off for baseline");
-            Console.ReadLine();
-
-            var before = new byte[len];
-            if (!ReadProcessMemory(hProc, new IntPtr(hBase), before, len, out int n1) || n1 < 1024)
-            { Console.WriteLine("[RB3DX] Discovery: read failed, retrying..."); run--; continue; }
-
-            Console.WriteLine("[RB3DX] Discovery: baseline snapped — press SELECT to deploy SP");
-            WaitForButton(BTN_SELECT);
-            Thread.Sleep(300); // let button-press bytes clear
-            Console.WriteLine("[RB3DX] Discovery: snapshotting mid-deployment...");
-
-            var during = new byte[len];
-            if (!ReadProcessMemory(hProc, new IntPtr(hBase), during, len, out int n2) || n2 < 1024)
-            { Console.WriteLine("[RB3DX] Discovery: read failed, retrying..."); run--; continue; }
-
-            Console.WriteLine("[RB3DX] Discovery: let SP run out naturally, then press ENTER...");
-            Console.ReadLine();
-            Console.WriteLine("[RB3DX] Discovery: snapshotting post-SP...");
-
-            var after = new byte[len];
-            if (!ReadProcessMemory(hProc, new IntPtr(hBase), after, len, out int n3) || n3 < 1024)
-            { Console.WriteLine("[RB3DX] Discovery: read failed, retrying..."); run--; continue; }
-
-            // Valid: 0 in baseline, non-zero mid-deploy, back to 0 post-SP
-            var hits = new HashSet<uint>();
-            int cmp  = Math.Min(Math.Min(n1, n2), n3);
-            for (int i = 0; i < cmp; i++)
-                if (before[i] == 0 && during[i] != 0 && after[i] == 0)
-                    hits.Add((uint)(PS3_START + i));
-
-            if (hits.Count == 0)
+            // (Re)locate BaseStats objects via the vtable anchor.  These are the real
+            // gameplay stats — no behavioral lock-on needed; we read OverdriveActive
+            // (+32) straight from them.
+            if (statsAddrs.Count == 0)
             {
-                Console.WriteLine("[RB3DX] Discovery: no clean hits — relaxing post-SP check");
-                for (int i = 0; i < cmp; i++)
-                    if (before[i] == 0 && during[i] != 0)
-                        hits.Add((uint)(PS3_START + i));
+                statsAddrs = ScanEncoreStats(hProc, modBase, modEnd, statsVtables);
+                if (statsAddrs.Count == 0)
+                {
+                    Console.WriteLine("[Encore] No BaseStats found (not in a song?) — retrying in 2s");
+                    Thread.Sleep(SCAN_MS);
+                    continue;
+                }
+                // Report distinct vtables — real player stats should be one class (one vtable).
+                var vtset = new HashSet<long>();
+                var vb = new byte[8];
+                foreach (var s in statsAddrs)
+                    if (ReadProcessMemory(hProc, s, vb, 8, out int vn) && vn == 8)
+                        vtset.Add(BitConverter.ToInt64(vb, 0));
+                Console.WriteLine($"[Encore] Located {statsAddrs.Count} stats object(s), {vtset.Count} distinct vtable(s)");
             }
 
-            // Vote
-            foreach (var ea in hits)
+            // Poll OverdriveActive across all stats objects.  SP on if ANY player is active.
+            // Each object is re-validated (vtable still in image, fields sane) so a freed /
+            // reused object triggers a rescan instead of feeding garbage.
+            var  buf = new byte[0xB8]; // through Overdrive.Active at +0xB0
+            bool anyActive = false, anyValid = false;
+            foreach (var s in statsAddrs)
             {
-                votes.TryGetValue(ea, out int v);
-                votes[ea] = v + 1;
+                if (!ReadProcessMemory(hProc, s, buf, buf.Length, out int nr) || nr < 0xB8) continue;
+                long vptr = BitConverter.ToInt64(buf, 0);
+                bool vtOk = statsVtables.Count > 0 ? statsVtables.Contains(vptr) : (vptr >= modBase && vptr < modEnd);
+                if (!vtOk) continue;
+                double fill = BitConverter.ToDouble(buf, 0x98);
+                byte active = buf[0xB0];
+                if (double.IsNaN(fill) || fill < 0.0 || fill > 1.0 || active > 1) continue;
+                anyValid = true;
+                if (active == 1) anyActive = true;
             }
 
-            // Show addresses that appeared in more than half the runs so far
-            int threshold = (run + 1) / 2;
-            var leading   = votes.Where(kv => kv.Value >= threshold)
-                                 .OrderByDescending(kv => kv.Value)
-                                 .ToList();
-
-            Console.WriteLine($"[RB3DX] Discovery: run {run} — {leading.Count} address(es) seen in >= {threshold}/{run} runs:");
-            foreach (var kv in leading)
-                Console.WriteLine($"[RB3DX] Discovery:   PS3 EA 0x{kv.Key:X8}  ({kv.Value}/{run} runs)  hostVA 0x{memBase + kv.Key:X}");
-
-            if (leading.Count == 1 && leading[0].Value == run)
+            if (!anyValid)
             {
-                uint ea = leading[0].Key;
-                Console.WriteLine($"[RB3DX] Discovery: FOUND — PS3 EA 0x{ea:X8}  (hit every run)");
-                break;
+                // All stats objects went stale (song ended / freed) — force a rescan.
+                statsAddrs.Clear();
+                if (lastSP) { SetStarPowerAll(false); lastSP = false; }
+                Console.WriteLine("[Encore] Stats objects stale — rescanning...");
+                Thread.Sleep(SCAN_MS);
+                continue;
             }
-            else
-            {
-                Console.WriteLine("[RB3DX] Discovery: run again to narrow down");
-            }
-        }
-    }
 
-    static void WaitForButton(ushort button)
-    {
-        bool wasDown = false;
-        while (true)
-        {
-            bool down = false;
-            for (uint i = 0; i < 4; i++)
+            // If Encore's in-game bridge is delivering packets, it's authoritative —
+            // stand down so the scanner doesn't fight it.
+            if (Environment.TickCount64 - _encoreBridgeLastMs < 5000)
             {
-                var st = new XINPUT_STATE();
-                if (XInputGetState(i, ref st) != 0) continue;
-                if ((st.Gamepad.wButtons & button) != 0) { down = true; break; }
+                lastSP = anyActive; // stay in sync so we resume cleanly if the bridge stops
+                Thread.Sleep(POLL_MS);
+                continue;
             }
-            if (down && !wasDown) return;
-            wasDown = down;
-            Thread.Sleep(16);
+
+            if (anyActive != lastSP)
+            {
+                lastSP = anyActive;
+                Console.WriteLine($"[Encore] Overdrive → {(anyActive ? "ACTIVE" : "off")}");
+                SetStarPowerAll(anyActive);
+            }
+
+            Thread.Sleep(POLL_MS);
         }
     }
 
     static void PollRB3DX()
     {
-        // ── RB3DX star power support — work in progress ──────────────────────
+        // ── RB3DX star power via AOB vtable scan (same model as WTDE's AobScan) ───
+        // Confirmed 2026-06-12 by tracing the PPU write to the deploy flag in CE:
+        //   movbe [rax+rbx+0x5C], edx     rbx = g_base (0x300000000)
+        //                                 rax = OverdriveMeter object (guest EA)
+        //                                 edx = 1  (deploying)
+        // Every OverdriveMeter instance starts with its class vtable pointer — a guest
+        // EA into the game's static code (0x00DE1278), so it is STABLE across songs and
+        // across RPCS3 launches.  The deploy flag is a 4-byte big-endian int at
+        // object+0x5C (1 = deploying).  So: scan committed guest memory for that vtable
+        // EA — every match is an OverdriveMeter — and read +0x5C.  No base detection,
+        // no per-song or per-launch calibration.  Per-song reallocation is handled by
+        // re-scanning whenever the cached instances stop matching the vtable.
         //
-        // Approach: structural AOB scan for OverdriveMeter (HMX engine ObjPtr
-        // array pattern) to derive PS3 memBase, then poll Player::mDeployingBandEnergy
-        // at a hardcoded PS3 EA.  memBase varies per session due to host ASLR;
-        // PS3 EAs are deterministic for a given RB3DX version.
-        //
-        // Current status: memBase scan works (AobScanRb3 finds consistent candidates),
-        // but the correct PS3 EA for mDeployingBandEnergy has not been confirmed —
-        // discovered candidates fluctuate even when SP is not active.
-        // Leaving infrastructure in place for future research.
-        //
-        // See also: AobScanRb3, DiscoverSpFlag, FindRpcs3MemBase, DiagnoseRpcs3Memory
-        // Decomp ref: DarkRTA/rb3 — Player.h::mDeployingBandEnergy, OverdriveMeter.cpp
+        // (RPCS3 backs guest RAM with MEM_MAPPED sections, mirrored at several host
+        // bases — that's why the old FindRpcs3MemBase / saved-EA approach failed; it
+        // read RPCS3's static MEM_PRIVATE heap.  See RB3DX_FINDINGS.md.)
+        const string PROC_NAME    = "rpcs3";
+        const uint   OD_VTABLE_EA = 0x00DE1278; // OverdriveMeter vtable (guest EA, stored big-endian)
+        const int    OD_FLAG_OFF  = 0x5C;       // 4-byte BE int at object+0x5C; 1 = deploying
+        const int    POLL_MS      = 16;         // ~60 Hz
+        const int    SCAN_MS      = 3000;       // back-off when process absent / not in a song
 
-        Console.WriteLine("[RB3DX] Support not yet implemented — skipping");
+        Console.WriteLine($"[RB3DX] Star power watcher started — AOB scan for OverdriveMeter vtable 0x{OD_VTABLE_EA:X8}");
+
+        IntPtr hProc   = IntPtr.Zero;
+        int    lastPid = -1;
+        bool   lastSP  = false;
+        var    meters  = new List<long>();   // host VAs of live OverdriveMeter instances
+
+        bool ReadBE32(long hostVA, out long val)
+        {
+            var b = new byte[4]; val = 0;
+            if (!ReadProcessMemory(hProc, new IntPtr(hostVA), b, 4, out int n) || n != 4) return false;
+            val = ((long)b[0] << 24) | ((long)b[1] << 16) | ((long)b[2] << 8) | b[3];
+            return true;
+        }
+
+        while (true)
+        {
+            // ── Find / re-attach ──────────────────────────────────────────────
+            var procs = Process.GetProcessesByName(PROC_NAME);
+            if (procs.Length == 0)
+            {
+                if (hProc != IntPtr.Zero)
+                {
+                    CloseHandle(hProc); hProc = IntPtr.Zero; lastPid = -1; meters.Clear();
+                    Console.WriteLine("[RB3DX] Process gone — waiting...");
+                    SetStarPowerAll(false); lastSP = false;
+                }
+                Thread.Sleep(SCAN_MS);
+                continue;
+            }
+
+            var proc = procs[0];
+            foreach (var p in procs) if (p != proc) p.Dispose();
+
+            if (proc.Id != lastPid)
+            {
+                if (hProc != IntPtr.Zero) CloseHandle(hProc);
+                hProc   = OpenProcess(PROCESS_VM_READ | PROCESS_QUERY_LIMITED, false, proc.Id);
+                lastPid = proc.Id;
+                meters.Clear();
+                if (hProc == IntPtr.Zero || hProc == INVALID_HANDLE_VALUE)
+                {
+                    Console.WriteLine($"[RB3DX] OpenProcess failed (err={Marshal.GetLastWin32Error()}) — retrying");
+                    proc.Dispose(); hProc = IntPtr.Zero;
+                    Thread.Sleep(SCAN_MS);
+                    continue;
+                }
+                Console.WriteLine($"[RB3DX] Attached PID {proc.Id}");
+            }
+            proc.Dispose();
+
+            // ── Drop cached instances whose vtable no longer matches (song change /
+            //    reallocation), then rescan if we have none. ──────────────────────
+            meters.RemoveAll(m => !(ReadBE32(m, out long vt) && vt == OD_VTABLE_EA));
+
+            if (meters.Count == 0)
+            {
+                meters = ScanOverdriveMeters(hProc, OD_VTABLE_EA, OD_FLAG_OFF);
+                if (meters.Count == 0)
+                {
+                    if (lastSP) { SetStarPowerAll(false); lastSP = false; }
+                    Thread.Sleep(SCAN_MS);   // not in a song yet — back off
+                    continue;
+                }
+                Console.WriteLine($"[RB3DX] Found {meters.Count} OverdriveMeter instance(s) — polling");
+            }
+
+            // ── Poll: SP active if ANY instance has its deploy flag == 1. ───────
+            bool spNow = false, anyRead = false;
+            foreach (long m in meters)
+                if (ReadBE32(m + OD_FLAG_OFF, out long fv)) { anyRead = true; if (fv == 1) { spNow = true; break; } }
+
+            if (!anyRead) { meters.Clear(); Thread.Sleep(POLL_MS); continue; } // lost the process view
+
+            if (spNow != lastSP)
+            {
+                lastSP = spNow;
+                Console.WriteLine($"[RB3DX] Star power → {(spNow ? "ACTIVE" : "off")}");
+                SetStarPowerAll(spNow);
+            }
+
+            Thread.Sleep(POLL_MS);
+        }
     }
+
+    // Scans committed, readable regions of the RPCS3 process for the OverdriveMeter
+    // vtable EA (stored big-endian at object+0).  Each 4-aligned match is a candidate
+    // object; we keep those whose deploy flag (+flagOff) currently reads a sane 0/1.
+    // RPCS3 mirrors guest RAM at several host bases, so the same logical object appears
+    // multiple times — de-duplicated here by guest EA (the low 32 bits of the host VA,
+    // since the mirror bases are 4 GB-aligned).
+    static List<long> ScanOverdriveMeters(IntPtr hProc, uint vtableEA, int flagOff)
+    {
+        const uint MEM_COMMIT = 0x1000, PAGE_GUARD = 0x100, PAGE_NOACC = 0x01;
+        uint mbiSz = (uint)Marshal.SizeOf<MEMORY_BASIC_INFORMATION>();
+        byte b0 = (byte)(vtableEA >> 24), b1 = (byte)(vtableEA >> 16),
+             b2 = (byte)(vtableEA >> 8),  b3 = (byte)vtableEA;
+        var result = new List<long>();
+        var seen   = new HashSet<long>();
+        long addr  = 0x100000000L, end = 0x800000000L;
+        var  tmp   = new byte[16 * 1024 * 1024];
+        var  fb    = new byte[4];
+        while (addr < end)
+        {
+            if (VirtualQueryEx(hProc, new IntPtr(addr), out var mbi, mbiSz) == IntPtr.Zero) break;
+            long rb = mbi.BaseAddress.ToInt64(), rs = mbi.RegionSize.ToInt64();
+            if (rs <= 0) { addr = Math.Max(addr + 0x1000L, rb + 0x1000L); continue; }
+            uint pr = mbi.Protect & 0xFF;
+            if (mbi.State == MEM_COMMIT && (mbi.Protect & PAGE_GUARD) == 0 && pr != PAGE_NOACC && pr != 0x10)
+            {
+                long e = rb + rs;
+                for (long p = rb; p < e; p += tmp.Length)
+                {
+                    int want = (int)Math.Min((long)tmp.Length, e - p);
+                    if (!ReadProcessMemory(hProc, new IntPtr(p), tmp, want, out int got) || got < 4) continue;
+                    for (int i = 0; i + 4 <= got; i += 4)
+                    {
+                        if (tmp[i] != b0 || tmp[i+1] != b1 || tmp[i+2] != b2 || tmp[i+3] != b3) continue;
+                        long objHost = p + i;
+                        long key = objHost & 0xFFFFFFFFL;     // guest EA — collapses mirrors
+                        if (seen.Contains(key)) continue;
+                        if (ReadProcessMemory(hProc, new IntPtr(objHost + flagOff), fb, 4, out int fg) && fg == 4)
+                        {
+                            long fv = ((long)fb[0] << 24) | ((long)fb[1] << 16) | ((long)fb[2] << 8) | fb[3];
+                            if (fv == 0 || fv == 1) { result.Add(objHost); seen.Add(key); }
+                        }
+                    }
+                }
+            }
+            addr = rb + Math.Max(rs, 0x1000L);
+        }
+        return result;
+    }
+
 }
 
 // =============================================================================
@@ -2494,6 +3061,10 @@ class GuitarState : IEquatable<GuitarState>
     public string InstrumentType  { get; set; } = "guitar";
     // Star power — set by PollGHWTDE; true while SP is active/deployed in GHWTDE
     public bool   StarPower       { get; set; }
+    // Back/Select button — overlay watches it (with all 5 frets) to reset hit counters
+    public bool   Select          { get; set; }
+    // RB mode — set from config.ini; overlay swaps this player's guitar sprites for ALT versions
+    public bool   RbMode          { get; set; }
 
     // JSON property names match what the overlay expects
     public int    player        => Player;
@@ -2523,6 +3094,8 @@ class GuitarState : IEquatable<GuitarState>
     public bool   soloB       => SoloB;
     public bool   soloO       => SoloO;
     public bool   starPower   => StarPower;
+    public bool   select      => Select;
+    public bool   rbMode      => RbMode;
 
     public bool Equals(GuitarState other) =>
         other != null &&
@@ -2537,5 +3110,7 @@ class GuitarState : IEquatable<GuitarState>
         SoloG == other.SoloG && SoloR == other.SoloR && SoloY == other.SoloY &&
         SoloB == other.SoloB && SoloO == other.SoloO &&
         InstrumentType == other.InstrumentType &&
-        StarPower == other.StarPower;
+        StarPower == other.StarPower &&
+        Select == other.Select &&
+        RbMode == other.RbMode;
 }
